@@ -2,7 +2,7 @@
 title: "Intermediate Deliverable 1"
 author: "Third Time's the Charm"
 date: "2025-10-23"
-output: html_document
+output: github_document
 ---
 
 ```{r setup, include=FALSE}
