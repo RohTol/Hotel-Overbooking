@@ -1,0 +1,154 @@
+---
+title: "Intermediate Deliverable 1"
+author: "Third Time's the Charm"
+date: "2025-10-23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Step 0: Why?
+
+**Dataset Chosen:**  
+Hotel Reservations (~35,000 rows)  
+Predicts hotel booking cancellations and potential no-shows. The business use case focuses on **optimizing overbooking decisions** to maximize hotel occupancy and revenue.
+
+
+### Context (from Kaggle)
+> “The online hotel reservation channels have dramatically changed booking possibilities and customers’ behavior. A significant number of hotel reservations are called-off due to cancellations or no-shows. The typical reasons for cancellations include change of plans, scheduling conflicts, etc. This is often made easier by the option to do so free of charge or preferably at a low cost which is beneficial to hotel guests but it is a less desirable and possibly revenue-diminishing factor for hotels to deal with.”
+
+### Business Use Case
+We are building a model to predict which hotel reservations are most likely to cancel.  
+Although cancellations often result from a change of plans or scheduling conflicts, they impose a direct financial cost on the hotel.  
+To mitigate these losses and **maintain 100% occupancy**, the hotel can strategically **overbook** based on model predictions of cancellation likelihood.
+
+**Main Question:**  
+Can we predict which hotel reservations are most likely to be canceled, and use these predictions to make more profitable overbooking decisions?
+
+**Why it’s answerable with this dataset:**  
+- The dataset includes **booking-level data** for over 35 000 reservations with both categorical and numerical features (lead time, room type, guest history, etc.).  
+- The dependent variable `booking_status` is binary (Canceled / Not Canceled), making it well-suited for **classification via logistic regression**.  
+- With exploratory cleaning and modeling, we can estimate how much predictive signal exists and whether cancellation behavior is predictable enough to support overbooking decisions.
+
+
+### Financial Assumptions
+- **Revenue per booked room:** \$300 per night  
+- **Cancellations:** Guests can cancel free of charge at any time; each cancellation results in a \$300 revenue loss.  
+- **Overbooking cost:** If the hotel overbooks and cannot accommodate a guest (because no cancellations occur), it incurs \$400 per night in re-accommodation, goodwill, or compensation costs.  
+- **Variable costs per room:** Considered sunk and excluded from analysis (the cost of turning a room is identical regardless of occupancy).  
+- **No difference** between cancellation and no-show costs.
+
+
+### Cost–Benefit Matrix
+
+| Case | Model Prediction | Actual Outcome | Financial Impact |
+|------|--------------|----------------|-----------------|
+| **True Positive (TP)** | "Will Cancel" | Guest cancels | **+ \$300** (revenue from replacement guest) |
+| **True Negative (TN)** | "Will Not Cancel" | Guest does not cancel | **\$0** (no change in revenue) |
+| **False Negative (FN)** | "Will Not Cancel" | Guest cancels | **– \$300** (lost booking revenue) |
+| **False Positive (FP)** | "Will Cancel" | Guest shows up | **– \$400** (overbooking penalty) |
+
+
+### Objective
+Develop a predictive model that helps hotels **balance the trade-off** between overbooking risk and lost revenue due to cancellations, thereby maximizing **expected net revenue** and improving operational decision-making.
+
+
+### Step 0.5: Load Packages
+```{r}
+library(caret)
+```
+
+
+## Step 1: Load Data
+```{r}
+hotel <- read.csv("Hotel Reservations.csv", stringsAsFactors = TRUE)
+```
+
+## Step 2: Clean Data
+```{r}
+str(hotel)
+summary(hotel)
+
+```
+Let's remove booking id. Let's also convert our dependent variable (booking status) into 0s and 1s.
+```{r}
+hotel$Booking_ID = NULL
+hotel$booking_status <- ifelse(hotel$booking_status == "Canceled", 1, 0)
+str(hotel)
+summary(hotel)
+```
+
+## Step 3: Split Data
+We have about 36000 data entries. 15% of that is close to 5500 entries which should be more than comprehensive for a test set. 
+```{r}
+trainprop <- 0.85
+set.seed(12345)
+trainrows <- sample(1:nrow(hotel), trainprop*nrow(hotel))
+
+hotel_train <- hotel[trainrows, ]
+hotel_test <- hotel[-trainrows, ]
+```
+
+
+## Step 4: Build LogReg model
+
+Our baseline model will be a **vanilla Logistic Regression (LogReg)**, which predicts the probability of a booking being canceled.  
+This serves as the foundation for comparison with future models (e.g., neural networks, decision trees, etc.).
+```{r}
+logreg_model <- glm(booking_status ~ ., data = hotel_train, family = "binomial")
+```
+
+
+## Step 5: Predict
+Let's use a threshold of 0.5 for now.
+```{r}
+logreg_predictions <- predict(logreg_model, newdata = hotel_test, type = "response")
+logreg_pred_class <- ifelse(logreg_predictions >= 0.5, 1, 0)
+```
+
+## Step 6: Evaluate
+```{r}
+confusionMatrix(as.factor(logreg_pred_class), as.factor(hotel_test$booking_status), positive = "1")
+```
+The baseline logistic regression model achieved an **accuracy of 81.5%**, meaning it correctly classified roughly four out of five reservations.  
+The model’s **sensitivity (65%)** indicates that it successfully identified about two-thirds of actual cancellations, while its **specificity (89%)** shows strong performance in recognizing non-cancellations.  
+This balance suggests the model is slightly conservative—it’s better at avoiding false alarms (predicting cancellations that don’t happen) than at catching every cancellation.  
+For a hotel aiming to minimize overbooking costs, this trade-off is acceptable for out vanilla model, though future tuning will hopefully allow us to improve recall in order to maximize profits. 
+
+
+## Step 7: Profit
+Using the financial assumptions from **Step 0**, we can estimate the model’s impact on revenue compared to doing nothing (i.e., no overbooking policy).
+
+### Confusion Matrix Summary
+| Outcome | Count | Description |
+|------|------|-------------|
+| **True Positives (TP)** | 1,153 | Predicted “will cancel” and guest did cancel |
+| **True Negatives (TN)** | 3,281 | Predicted “will not cancel” and guest did not cancel |
+| **False Positives (FP)** | 393 | Predicted “will cancel” but guest showed up |
+| **False Negatives (FN)** | 615 | Predicted “will not cancel” but guest canceled |
+
+### Financial Impact
+| Case | Profit / Loss per Case | Count | Total Impact |
+|------|------------|--------|---------|
+| **TP** | +\$300 | 1,153 | +\$345,900 |
+| **TN** | \$0 | 3,281 | \$0 |
+| **FP** | –\$400 | 393 | –\$157,200 |
+| **FN** | –\$300 | 615 | –\$184,500 |
+
+**Total Expected Profit = \$345,900 – \$157,200 – \$184,500 = +\$4,200**
+
+### Baseline Comparison (Before Model)
+If the hotel does **no overbooking**, every canceled booking represents a loss of \$300.  
+There were **1,768 total cancellations (TP + FN)**, resulting in  
+**Baseline Profit = 1,768 × (–\$300) = –\$530,400**
+
+### Interpretation
+- **Without the model:** expected loss of \$530,400  
+- **With the model:** expected gain of \$4,200  
+- an overall **improvement of about \$534,600** in expected revenue on the test sample. 
+
+Even this simple logistic regression adds meaningful value by identifying likely cancellations and allowing profitable overbooking.  
+Future models with higher recall could further reduce lost revenue and increase profitability.
+
