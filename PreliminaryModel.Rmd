@@ -58,6 +58,12 @@ Develop a predictive model that helps hotels **balance the trade-off** between o
 ### Step 0.5: Load Packages
 ```{r}
 library(caret)
+library(neuralnet)
+library(class)
+library(C50)
+library(ggplot2)
+library(randomForest)
+library(kernlab)
 ```
 
 
@@ -81,18 +87,32 @@ summary(hotel)
 ```
 
 ## Step 3: Split Data
-We have about 36000 data entries. 15% of that is close to 5500 entries which should be more than comprehensive for a test set. 
+We have 36000 data entries. In order to build a second level model, we are going to keep 30% for evaluation.
+Let's normalize and dummify the data.
 ```{r}
-trainprop <- 0.85
-set.seed(12345)
-trainrows <- sample(1:nrow(hotel), trainprop*nrow(hotel))
+hotel_dummies <- as.data.frame(model.matrix(~ . - booking_status - 1, data = hotel))
+hotel_dummies$booking_status <- hotel$booking_status
+minmax <- function(x) {
+  (x - min(x)) / (max(x) - min(x))
+}
 
-hotel_train <- hotel[trainrows, ]
-hotel_test <- hotel[-trainrows, ]
+hotel_scaled <- as.data.frame(lapply(hotel_dummies, minmax))
+summary(hotel_scaled)
+```
+
+```{r}
+trainprop <- 0.7
+set.seed(12345)
+trainrows <- sample(1:nrow(hotel_scaled), trainprop * nrow(hotel_scaled))
+
+hotel_train <- hotel_scaled[trainrows, ]
+hotel_test  <- hotel_scaled[-trainrows, ]
 ```
 
 
-## Step 4: Build LogReg model
+## Step 4: Build Models
+
+### Step 4.1: Build LogReg Model
 
 Our baseline model will be a **vanilla Logistic Regression (LogReg)**, which predicts the probability of a booking being canceled.  
 This serves as the foundation for comparison with future models (e.g., neural networks, decision trees, etc.).
@@ -100,13 +120,137 @@ This serves as the foundation for comparison with future models (e.g., neural ne
 logreg_model <- glm(booking_status ~ ., data = hotel_train, family = "binomial")
 ```
 
+### Step 4.2: Build KNN Model
+Here, we separate our predictors and target variables into training and testing sets. 
+```{r}
+train_features <- subset(hotel_train, select = -booking_status)
+train_labels <- hotel_train$booking_status
+test_features <- subset(hotel_test, select = -booking_status)
+test_labels <- hotel_test$booking_status
+```
+
+### Step 4.3: Build ANN Model
+We trained a feed-forward artificial neural network (ANN) to predict which bookings will cancel using the scaled training dataset. The maximum number of iterations of the optimization algorithm (stepmax) is set to a high value to ensure the model reaches convergence before it stops training. 
+```{r, cache = TRUE}
+# ann_model <- neuralnet(
+#   booking_status ~ .,
+#   data = hotel_train,
+#   lifesign = "minimal",
+#   stepmax = 1e8,
+#   hidden = 4
+# )
+# plot(ann_model)
+```
+
+
+### Step 4.4: Build Decision Tree Model
+We used the C5.0 algorithm from the C50 package. Decision trees are interpretable models that split the data based on the most informative features, making them valuable for understanding the decision-making process behind churn. We trained the model on the full set of predictors in the training data and then generated booking status probability predictions for the test set. These probabilities were converted into binary classifications using a threshold of 0.5l. The model’s performance was then evaluated using a confusion matrix, helping us assess how well the tree correctly identified customers who were likely to cancel.
+```{r, cache=TRUE}
+m_decision <- C5.0(
+  as.factor(booking_status) ~ .,
+  data = hotel_train
+)
+```
+
+### Step 4.5: Build SVM
+```{r, cache=TRUE}
+hotel_svm <- ksvm(
+  as.factor(booking_status) ~ .,
+  data = hotel_train,
+  kernel = "vanilladot"  # linear kernel
+)
+
+
+```
+
+### Step 4.6: Build Random Forest
+```{r, cache=TRUE}
+hotel_train$booking_status <- as.factor(hotel_train$booking_status)
+hotel_test$booking_status  <- as.factor(hotel_test$booking_status)
+
+rf_model <- randomForest(
+  booking_status ~ .,
+  data = hotel_train,
+  ntree = 500,
+  mtry = sqrt(ncol(hotel_train) - 1),
+  importance = TRUE
+)
+
+plot(rf_model)
+varImpPlot(rf_model)
+```
+
 
 ## Step 5: Predict
-Let's use a threshold of 0.5 for now.
+To generate predictions, we applied a 0.5 threshold (standard).
+
+### Step 5.1: Predict LogReg
 ```{r}
 logreg_predictions <- predict(logreg_model, newdata = hotel_test, type = "response")
 logreg_pred_class <- ifelse(logreg_predictions >= 0.5, 1, 0)
 ```
+
+### Step 5.2: Predict KNN Model
+Let's figure out the optimal k value. We want to balance sensitivity and accuracy effectively.
+```{r, cache=TRUE}
+accuracy_values <- c()
+sensitivity_values <- c()
+k_values <- seq(1, 31, by = 2)
+
+train_labels <- factor(train_labels, levels = c(0, 1))
+test_labels  <- factor(test_labels,  levels = c(0, 1))
+for (k in k_values) {
+  pred_knn <- knn(train = train_features,
+                  test  = test_features,
+                  cl    = train_labels,
+                  k     = k)
+  
+  cm <- confusionMatrix(pred_knn, test_labels, positive = "1")
+  accuracy_values <- c(accuracy_values, cm$overall["Accuracy"])
+  sensitivity_values <- c(sensitivity_values, cm$byClass["Sensitivity"])
+}
+
+knn_results <- data.frame(k = k_values,
+                          Accuracy = round(accuracy_values, 4),
+                          Sensitivity = round(sensitivity_values, 4))
+print(knn_results)
+```
+Based on KNN tuning results, the optimal value of k = 5 achieves the best balance between accuracy (84.5%) and sensitivity (74%).
+This configuration minimizes overfitting while maintaining reliable detection of likely cancellations, making it a practical choice for hotel overbooking predictions.
+
+Let's build our final model now.
+```{r}
+pred_knn <- knn(train = train_features, test = test_features, cl = train_labels, k = 5)
+
+```
+
+
+### Step 5.3: Predict ANN
+```{r}
+# ann_predictions <- predict(ann_model, hotel_test)
+# ann_pred_class <- ifelse(ann_predictions >= 0.5, 1, 0)
+```
+
+### Step 5.4: Predict Decision Tree
+```{r}
+predict_entropy <- predict(m_decision, hotel_test, type = "prob")[, "1"]
+decision_pred <- ifelse(predict_entropy >= 0.5, 1, 0)
+```
+
+### Step 5.5: Predict SVM
+```{r}
+hotel_pred_svm <- predict(hotel_svm, hotel_test, type = "response")
+svm_pred_class <- ifelse(hotel_pred_svm == "1", 1, 0)
+
+```
+
+### Step 5.6: Predict Random Forest
+```{r}
+rf_prob <- predict(rf_model, hotel_test, type = "prob")
+rf_prob_1 <- rf_prob[, "1"]
+rf_pred_class <- ifelse(rf_prob_1 >= 0.5, 1, 0)
+```
+
 
 ## Step 6: Evaluate
 ```{r}
@@ -124,30 +268,30 @@ Using the financial assumptions from **Step 0**, we can estimate the model’s i
 ### Confusion Matrix Summary
 | Outcome | Count | Description |
 |------|------|-------------|
-| **True Positives (TP)** | 1,153 | Predicted “will cancel” and guest did cancel |
-| **True Negatives (TN)** | 3,281 | Predicted “will not cancel” and guest did not cancel |
-| **False Positives (FP)** | 393 | Predicted “will cancel” but guest showed up |
-| **False Negatives (FN)** | 615 | Predicted “will not cancel” but guest canceled |
+| **True Positives (TP)** | 2,291 | Predicted “will cancel” and guest did cancel |
+| **True Negatives (TN)** | 6,548 | Predicted “will not cancel” and guest did not cancel |
+| **False Positives (FP)** | 782 | Predicted “will cancel” but guest showed up |
+| **False Negatives (FN)** | 1,262 | Predicted “will not cancel” but guest canceled |
 
 ### Financial Impact
 | Case | Profit / Loss per Case | Count | Total Impact |
 |------|------------|--------|---------|
-| **TP** | +\$300 | 1,153 | +\$345,900 |
-| **TN** | \$0 | 3,281 | \$0 |
-| **FP** | –\$400 | 393 | –\$157,200 |
-| **FN** | –\$300 | 615 | –\$184,500 |
+| **TP** | +\$300 | 2,291 | +\$687,300 |
+| **TN** | \$0 | 6,548 | \$0 |
+| **FP** | –\$400 | 782 | –\$312,800 |
+| **FN** | –\$300 | 1,262 | –\$378,600 |
 
-**Total Expected Profit = \$345,900 – \$157,200 – \$184,500 = +\$4,200**
+**Total Expected Profit = \$687,300 – \$312,800 – \$368,600 = -\$13,100**
 
 ### Baseline Comparison (Before Model)
 If the hotel does **no overbooking**, every canceled booking represents a loss of \$300.  
-There were **1,768 total cancellations (TP + FN)**, resulting in  
-**Baseline Profit = 1,768 × (–\$300) = –\$530,400**
+There were **3,553 total cancellations (TP + FN)**, resulting in  
+**Baseline Profit = 3,553 × (–\$300) = –\$1,065,900**
 
 ### Interpretation
-- **Without the model:** expected loss of \$530,400  
-- **With the model:** expected gain of \$4,200  
-- an overall **improvement of about \$534,600** in expected revenue on the test sample. 
+- **Without the model:** expected loss of \$1,065,900  
+- **With the model:** expected loss of \$13,100  
+- an overall **improvement of about \$1,052,800** in expected revenue on the test sample. 
 
 Even this simple logistic regression adds meaningful value by identifying likely cancellations and allowing profitable overbooking.  
 Future models with higher recall could further reduce lost revenue and increase profitability.
