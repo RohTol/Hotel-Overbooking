@@ -11,6 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Step 0: Why?
 
+
 **Dataset Chosen:**  
 Hotel Reservations (~35,000 rows)  
 Predicts hotel booking cancellations and potential no-shows. The business use case focuses on **optimizing overbooking decisions** to maximize hotel occupancy and revenue.
