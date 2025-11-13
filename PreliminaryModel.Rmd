@@ -186,6 +186,7 @@ varImpPlot(rf_model)
 To generate predictions, we applied a 0.5 threshold (standard).
 
 ### Step 5.1: Predict LogReg
+#### Hi
 ```{r}
 logreg_predictions <- predict(logreg_model, newdata = hotel_test, type = "response")
 logreg_pred_class <- ifelse(logreg_predictions >= 0.5, 1, 0)
