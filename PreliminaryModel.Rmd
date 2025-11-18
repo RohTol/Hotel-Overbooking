@@ -1,5 +1,5 @@
 ---
-title: "Intermediate Deliverable 1"
+title: "Final Project Draft of Code"
 author: "Third Time's the Charm"
 date: "2025-10-23"
 output: github_document
@@ -89,25 +89,38 @@ summary(hotel)
 
 ## Step 3: Split Data
 We have 36000 data entries. In order to build a second level model, we are going to keep 30% for evaluation.
-Let's normalize and dummify the data.
+Let's dummify and split the data.
 ```{r}
 hotel_dummies <- as.data.frame(model.matrix(~ . - booking_status - 1, data = hotel))
 hotel_dummies$booking_status <- hotel$booking_status
-minmax <- function(x) {
-  (x - min(x)) / (max(x) - min(x))
-}
 
-hotel_scaled <- as.data.frame(lapply(hotel_dummies, minmax))
-summary(hotel_scaled)
-```
-
-```{r}
 trainprop <- 0.7
 set.seed(12345)
-trainrows <- sample(1:nrow(hotel_scaled), trainprop * nrow(hotel_scaled))
+trainrows <- sample(1:nrow(hotel_dummies), trainprop * nrow(hotel_dummies))
 
-hotel_train <- hotel_scaled[trainrows, ]
-hotel_test  <- hotel_scaled[-trainrows, ]
+hotel_train <- hotel_dummies[trainrows, ]
+hotel_test  <- hotel_dummies[-trainrows, ]
+str(hotel_train)
+summary(hotel_train)
+```
+
+Let's now keep a normalized copy of the data for some of our models.
+```{r}
+minmax <- function(x) {
+  if (is.numeric(x)) {
+    return((x - min(x)) / (max(x) - min(x)))
+  } else {
+    return(x)
+  }
+}
+
+hotel_train_scaled <- as.data.frame(lapply(hotel_train, minmax))
+hotel_test_scaled <- as.data.frame(lapply(hotel_test, minmax))
+hotel_train_scaled$booking_status <- as.factor(hotel_train$booking_status)
+hotel_test_scaled$booking_status  <- as.factor(hotel_test$booking_status)
+
+str(hotel_train_scaled)
+summary(hotel_train_scaled)
 ```
 
 
@@ -117,61 +130,140 @@ hotel_test  <- hotel_scaled[-trainrows, ]
 
 Our baseline model will be a **vanilla Logistic Regression (LogReg)**, which predicts the probability of a booking being canceled.  
 This serves as the foundation for comparison with future models (e.g., neural networks, decision trees, etc.).
-```{r}
+```{r, cache=TRUE}
 logreg_model <- glm(booking_status ~ ., data = hotel_train, family = "binomial")
 ```
 
+Let's also build an enhanced model. To improve the predictive performance of our baseline logistic regression model, we introduce several **interaction terms**. These interactions allow the model to capture relationships between variables that jointly influence cancellation behavior. Including these terms helps the model represent more complex customer patterns that cannot be captured by individual predictors alone.
+
+#### **1. `lead_time × avg_price_per_room`**
+This interaction captures how the impact of lead time changes depending on room price.
+- Customers who book **high-priced rooms far in advance** may be more likely to cancel as plans, budgets, or alternatives change.
+- Customers booking inexpensive rooms far in advance may behave differently.
+This term allows the model to account for situations where **price modifies the effect of lead time** on cancellations.
+
+#### **2. `no_of_special_requests × repeated_guest`**
+This interaction differentiates behavior between repeat guests and first-time customers.
+- Repeat guests with many special requests may be more committed (e.g., loyal or planned stays).
+- First-time guests with many requests may be more likely to cancel if expectations shift.
+This term helps the model identify how **customer loyalty interacts with booking complexity**.
+
+#### **3. `no_of_weekend_nights × no_of_week_nights`**
+This interaction captures the structure of the guest’s stay.
+- Longer, more complex trips (spanning both weekend and weekday nights) may carry higher cancellation risks.
+This term helps the model evaluate how the **overall length and nature of the stay** influence cancellation behavior.
+
+#### **4. `arrival_month × market_segment_type` (applied across dummy variables)**
+After dummification, `market_segment_type` becomes several binary indicators (e.g., Online, Offline, Corporate).  
+Interacting `arrival_month` with each segment dummy allows the model to learn **segment-specific seasonal cancellation patterns**:
+- Corporate travelers may cancel more during holiday months.
+- Online/OTA bookings often surge—and cancel more—during peak travel seasons or promotional periods.
+- Offline bookings (e.g., via agents) may follow entirely different seasonal trends.  
+By including these interactions, the model captures how **seasonality modifies cancellation behavior across different booking channels**.
+If you want, I can also generate a matching R code block (perfectly formatted) and a clean narrative paragraph describing the enhanced model for your deliverable.
+
+
+```{r, cache=TRUE}
+logreg_model_enhanced <- glm(
+  booking_status ~ 
+    . +
+    lead_time * avg_price_per_room +
+    no_of_special_requests * repeated_guest +
+    no_of_weekend_nights * no_of_week_nights +
+    arrival_month * market_segment_typeComplementary +
+    arrival_month * market_segment_typeCorporate +
+    arrival_month * market_segment_typeOffline +
+    arrival_month * market_segment_typeOnline,
+  data = hotel_train,
+  family = "binomial"
+)
+
+
+```
+
+
 ### Step 4.2: Build KNN Model
-Here, we separate our predictors and target variables into training and testing sets. 
+Here, we separate our predictors and target variables into training and testing sets. We will predict and evaluate in step 5. 
 ```{r}
-train_features <- subset(hotel_train, select = -booking_status)
-train_labels <- hotel_train$booking_status
-test_features <- subset(hotel_test, select = -booking_status)
-test_labels <- hotel_test$booking_status
+train_features <- subset(hotel_train_scaled, select = -booking_status)
+train_labels <- hotel_train_scaled$booking_status
+test_features <- subset(hotel_test_scaled, select = -booking_status)
+test_labels <- hotel_test_scaled$booking_status
 ```
 
 ### Step 4.3: Build ANN Model
-We trained a feed-forward artificial neural network (ANN) to predict which bookings will cancel using the scaled training dataset. The maximum number of iterations of the optimization algorithm (stepmax) is set to a high value to ensure the model reaches convergence before it stops training. 
+We are now building an ANN model with a hidden layer of 5 neurons. With structured data, typically a shallow network can capture enough valuable relationships. 
 ```{r, cache = TRUE}
-# ann_model <- neuralnet(
-#   booking_status ~ .,
-#   data = hotel_train,
-#   lifesign = "minimal",
-#   stepmax = 1e8,
-#   hidden = 4
-# )
-# plot(ann_model)
+ann_model <- neuralnet(
+  booking_status ~ .,
+  data = hotel_train_scaled,
+  lifesign = "full",
+  stepmax = 1e6,
+  hidden = 5
+)
+plot(ann_model)
 ```
 
 
 ### Step 4.4: Build Decision Tree Model
-We used the C5.0 algorithm from the C50 package. Decision trees are interpretable models that split the data based on the most informative features, making them valuable for understanding the decision-making process behind churn. We trained the model on the full set of predictors in the training data and then generated booking status probability predictions for the test set. These probabilities were converted into binary classifications using a threshold of 0.5l. The model’s performance was then evaluated using a confusion matrix, helping us assess how well the tree correctly identified customers who were likely to cancel.
+We will now build a normal decision tree model. We will not impose a cost matrix here but we will in the second level decision tree. 
 ```{r, cache=TRUE}
 m_decision <- C5.0(
   as.factor(booking_status) ~ .,
   data = hotel_train
 )
+
+plot(m_decision)
 ```
 
 ### Step 4.5: Build SVM
+We will train a basic SVM with a RBF kernel.
 ```{r, cache=TRUE}
-hotel_svm <- ksvm(
+hotel_svm_basic <- ksvm(
   as.factor(booking_status) ~ .,
-  data = hotel_train,
-  kernel = "vanilladot"  # linear kernel
+  data = hotel_train_scaled,
+  kernel = "rbfdot",
+  prob.model = TRUE
 )
-
-
 ```
 
+We will also build an enhanced SVM model. We  refine the model by tuning two key hyperparameters:
+
+**C (Regularization parameter):**  
+Controls the trade-off between maximizing the margin and minimizing classification errors.
+
+- A **larger C** (e.g., 5) penalizes misclassifications more heavily, producing a **smaller margin** and a tighter, more detailed fit to the data (lower bias, higher variance).  
+- A **smaller C** allows more errors but produces a **wider margin**, leading to a smoother, more generalizable model (higher bias, lower variance).
+
+**σ (Sigma in the RBF kernel):**  
+Determines how far the influence of each support vector extends.
+
+- A **smaller σ** (e.g., 0.05) makes each support vector’s influence very local, enabling the model to capture **fine-grained, nonlinear boundaries** (risk of overfitting).  
+- A **larger σ** smooths the decision boundary, reducing overfitting but potentially missing subtle structure in the data.
+
+This improved SVM aims to better separate likely cancellations from non-cancellations by allowing a more flexible, finely tuned boundary.
+```{r, cache=TRUE}
+hotel_svm_enhanced <- ksvm(
+  as.factor(booking_status) ~ .,
+  data = hotel_train_scaled,
+  kernel = "rbfdot",
+  C = 1,
+  kpar = list(sigma = 0.1),
+  prob.model = TRUE
+)
+```
+
+
+
 ### Step 4.6: Build Random Forest
+We now train a Random Forest classifier using the unscaled dataset. We include 500 trees and use the square-root rule for mtry, which is standard for classification tasks.
 ```{r, cache=TRUE}
 hotel_train$booking_status <- as.factor(hotel_train$booking_status)
 hotel_test$booking_status  <- as.factor(hotel_test$booking_status)
 
 rf_model <- randomForest(
-  booking_status ~ .,
-  data = hotel_train,
+  x = hotel_train[, -which(names(hotel_train) == "booking_status")],
+  y = hotel_train$booking_status,
   ntree = 500,
   mtry = sqrt(ncol(hotel_train) - 1),
   importance = TRUE
@@ -186,85 +278,283 @@ varImpPlot(rf_model)
 To generate predictions, we applied a 0.5 threshold (standard).
 
 ### Step 5.1: Predict LogReg
-#### Hi
-```{r}
-logreg_predictions <- predict(logreg_model, newdata = hotel_test, type = "response")
-logreg_pred_class <- ifelse(logreg_predictions >= 0.5, 1, 0)
+```{r, cache=TRUE}
+logreg_prob <- predict(logreg_model, newdata = hotel_test, type = "response")
+pred_logreg <- ifelse(logreg_prob >= 0.5, 1, 0)
+
+logreg_enh_prob <- predict(logreg_model_enhanced, newdata = hotel_test, type = "response")
+pred_logreg_enh <- ifelse(logreg_enh_prob >= 0.5, 1, 0)
 ```
 
 ### Step 5.2: Predict KNN Model
 Let's figure out the optimal k value. We want to balance sensitivity and accuracy effectively.
 ```{r, cache=TRUE}
-accuracy_values <- c()
-sensitivity_values <- c()
-k_values <- seq(1, 31, by = 2)
+results <- data.frame(k = numeric(), Accuracy = numeric(), Sensitivity = numeric())
 
-train_labels <- factor(train_labels, levels = c(0, 1))
-test_labels  <- factor(test_labels,  levels = c(0, 1))
-for (k in k_values) {
-  pred_knn <- knn(train = train_features,
-                  test  = test_features,
-                  cl    = train_labels,
-                  k     = k)
+for (k in seq(1, 31, by = 2)) {
   
-  cm <- confusionMatrix(pred_knn, test_labels, positive = "1")
-  accuracy_values <- c(accuracy_values, cm$overall["Accuracy"])
-  sensitivity_values <- c(sensitivity_values, cm$byClass["Sensitivity"])
+  knn_pred <- knn(
+    train = train_features,
+    test  = test_features,
+    cl    = train_labels,
+    k     = k,
+    prob  = TRUE
+  )
+
+  knn_prob <- ifelse(
+    knn_pred == "1",
+    attr(knn_pred, "prob"),   
+    1 - attr(knn_pred, "prob") 
+  )
+  
+  knn_binary <- ifelse(knn_prob >= 0.5, 1, 0)
+  
+  cm <- confusionMatrix(
+    as.factor(knn_binary),
+    as.factor(test_labels),
+    positive = "1"
+  )
+  
+  results <- rbind(
+    results,
+    data.frame(
+      k = k,
+      Accuracy = cm$overall["Accuracy"],
+      Sensitivity = cm$byClass["Sensitivity"]
+    )
+  )
 }
 
-knn_results <- data.frame(k = k_values,
-                          Accuracy = round(accuracy_values, 4),
-                          Sensitivity = round(sensitivity_values, 4))
-print(knn_results)
+results
+
 ```
 Based on KNN tuning results, the optimal value of k = 5 achieves the best balance between accuracy (84.5%) and sensitivity (74%).
 This configuration minimizes overfitting while maintaining reliable detection of likely cancellations, making it a practical choice for hotel overbooking predictions.
 
 Let's build our final model now.
-```{r}
-pred_knn <- knn(train = train_features, test = test_features, cl = train_labels, k = 5)
+```{r, cache=TRUE}
+knn_final <- knn(
+  train = train_features,
+  test  = test_features,
+  cl    = train_labels,
+  k     = 5,
+  prob  = TRUE
+)
 
+knn_prob_final <- ifelse(
+  knn_final == "1",
+  attr(knn_final, "prob"),
+  1 - attr(knn_final, "prob")
+)
+
+knn_binary_final <- ifelse(knn_prob_final >= 0.5, 1, 0)
 ```
 
 
 ### Step 5.3: Predict ANN
-```{r}
-# ann_predictions <- predict(ann_model, hotel_test)
-# ann_pred_class <- ifelse(ann_predictions >= 0.5, 1, 0)
+```{r, cache=TRUE}
+ann_prob <- predict(ann_model, hotel_test_scaled)
+pred_ann <- ifelse(ann_prob >= 0.5, 1, 0)
 ```
 
 ### Step 5.4: Predict Decision Tree
-```{r}
-predict_entropy <- predict(m_decision, hotel_test, type = "prob")[, "1"]
-decision_pred <- ifelse(predict_entropy >= 0.5, 1, 0)
+```{r, cache=TRUE}
+dt_prob <- predict(m_decision, hotel_test, type = "prob")[, "1"]
+pred_dt <- ifelse(dt_prob >= 0.5, 1, 0)
 ```
 
 ### Step 5.5: Predict SVM
-```{r}
-hotel_pred_svm <- predict(hotel_svm, hotel_test, type = "response")
-svm_pred_class <- ifelse(hotel_pred_svm == "1", 1, 0)
+
+Basic SVM
+```{r, cache=TRUE}
+svm_rbf_prob <- predict(hotel_svm_basic, hotel_test_scaled, type = "probabilities")
+svm_rbf_prob_class1 <- svm_rbf_prob[, "1"]
+pred_svm_basic <- ifelse(svm_rbf_prob_class1 >= 0.5, 1, 0)
 
 ```
 
+Enhanced SVM
+```{r, cache=TRUE}
+svm_rbf_enhanced <- predict(hotel_svm_enhanced, hotel_test_scaled, type = "probabilities")
+svm_rbf_enhanced_class1 <- svm_rbf_enhanced[, "1"]
+pred_svm_enhanced <- ifelse(svm_rbf_enhanced_class1 >= 0.5, 1, 0)
+```
+
+
 ### Step 5.6: Predict Random Forest
-```{r}
-rf_prob <- predict(rf_model, hotel_test, type = "prob")
-rf_prob_1 <- rf_prob[, "1"]
-rf_pred_class <- ifelse(rf_prob_1 >= 0.5, 1, 0)
+```{r, cache=TRUE}
+rf_prob <- predict(rf_model, hotel_test, type = "prob")[, "1"]
+pred_rf <- ifelse(rf_prob >= 0.5, 1, 0)
 ```
 
 
 ## Step 6: Evaluate
+
+### Step 6.1: Evaluate LogReg Models
+Basic LogReg
 ```{r}
-confusionMatrix(as.factor(logreg_pred_class), as.factor(hotel_test$booking_status), positive = "1")
+confusionMatrix(as.factor(pred_logreg), as.factor(hotel_test$booking_status), positive = "1")
 ```
 The baseline logistic regression model achieved an **accuracy of 81.5%**, meaning it correctly classified roughly four out of five reservations.  
 The model’s **sensitivity (65%)** indicates that it successfully identified about two-thirds of actual cancellations, while its **specificity (89%)** shows strong performance in recognizing non-cancellations.  
 This balance suggests the model is slightly conservative—it’s better at avoiding false alarms (predicting cancellations that don’t happen) than at catching every cancellation.  
 For a hotel aiming to minimize overbooking costs, this trade-off is acceptable for out vanilla model, though future tuning will hopefully allow us to improve recall in order to maximize profits. 
 
+Enhanced LogReg
+```{r}
+confusionMatrix(as.factor(pred_logreg_enh), as.factor(hotel_test$booking_status), positive = "1")
+```
+Very similar, but we will choose enhanced.
 
-## Step 7: Profit
+### Step 6.2: Evaluate KNN Model
+```{r}
+confusionMatrix(as.factor(knn_binary_final), as.factor(hotel_test_scaled$booking_status), positive = "1")
+```
+
+### Step 6.3: Evaluate ANN Model
+```{r}
+confusionMatrix(as.factor(pred_ann), as.factor(hotel_test_scaled$booking_status), positive = "1")
+```
+
+### Step 6.4: Evaluate Decision Tree
+```{r}
+confusionMatrix(as.factor(pred_dt), as.factor(hotel_test$booking_status), positive = "1")
+```
+
+### Step 6.5: Evaluate SVM
+Basic SVM
+```{r}
+confusionMatrix(as.factor(pred_svm_basic), as.factor(hotel_test_scaled$booking_status), positive = "1")
+```
+
+Enhanced SVM
+```{r}
+confusionMatrix(as.factor(pred_svm_enhanced), as.factor(hotel_test_scaled$booking_status), positive = "1")
+```
+Enhanced better. better accuracy, kappa, same balanced accuracy. 
+
+### Step 6.6: Evaluate Random Forest
+```{r}
+confusionMatrix(as.factor(pred_rf), as.factor(hotel_test$booking_status), positive = "1")
+```
+
+### Summary Table
+| Model                | Accuracy | Kappa  | Sensitivity | Specificity | Balanced Accuracy |
+|---------------------|----------|--------|-------------|-------------|-------------------|
+| **LogReg (Basic)**      | 0.8122   | 0.5575 | 0.6448      | 0.8933      | 0.7691            |
+| **LogReg (Enhanced)**   | 0.8147   | 0.5601 | 0.6347      | 0.9019      | 0.7683            |
+| **KNN (k = 5)**         | 0.8383   | 0.6298 | 0.7394      | 0.8862      | 0.8128            |
+| **ANN**                 | 0.7813   | 0.5320 | 0.7864  | 0.7789      | 0.7826            |
+| **Decision Tree**       | 0.8820   | 0.7284 | 0.7954      | 0.9240      | 0.8597            |
+| **SVM (Basic RBF)**     | 0.8035   | 0.5584 | 0.7216      | 0.8432      | 0.7824            |
+| **SVM (Enhanced)**      | 0.8140   | 0.5703 | 0.6842      | 0.8769      | 0.7806            |
+| **Random Forest**       | **0.8975** | **0.7629** | **0.8089**      | **0.9405** | **0.8747**       |
+
+Random Forest clearly the best
+
+
+## Step 7: Build Second Level Model Dataset
+```{r}
+stacked_data <- data.frame(
+  logreg = logreg_enh_prob,
+  knn = knn_prob_final,
+  ann = ann_prob,
+  decision_tree = dt_prob,
+  svm = svm_rbf_enhanced_class1,
+  random_forest = rf_prob,
+  booking_status = hotel_test$booking_status
+)
+
+head(stacked_data)
+```
+
+## Step 8: Split Stacked Data
+```{r}
+trainprop <- 0.7
+trainrows <- sample(1:nrow(stacked_data), trainprop * nrow(stacked_data))
+
+stack_train <- stacked_data[trainrows, ]
+stack_test  <- stacked_data[-trainrows, ]
+```
+
+## Step 9: Build Second Level Models
+### Step 9.1: Build Decision Tree with Cost Matrix
+```{r}
+cost_matrix <- matrix(c(0, 400, 300, 0), nrow = 2)
+cost_matrix
+```
+Build Decision Tree
+```{r}
+model_stack <- C5.0(
+  x = stack_train[, -which(colnames(stack_train) == "booking_status")],
+  y = as.factor(stack_train$booking_status),
+  costs = cost_matrix
+)
+```
+
+### Step 9.2: Build Random Forest with Class Weights
+```{r}
+classwt = c("0" = 400, "1" = 300)
+rf_stack <- randomForest(
+  x = stack_train[, -which(colnames(stack_train) == "booking_status")],
+  y = as.factor(stack_train$booking_status),
+  ntree = 500,
+  mtry = sqrt(ncol(stack_train) - 1),
+  classwt = c("0" = 400, "1" = 300)
+)
+
+
+```
+
+
+## Step 10: Predict and Evaluate
+### Step 10.1: Predict/Evaluate Decision Tree
+```{r}
+stack_pred_class <- predict(model_stack, stack_test, type = "class")
+
+confusionMatrix(
+  as.factor(stack_pred_class),
+  as.factor(stack_test$booking_status),
+  positive = "1"
+)
+
+```
+
+### Step 10.2: Predict/Evaluate Random Forest
+```{r}
+rf_stack_prob <- predict(rf_stack, stack_test, type = "prob")[, "1"]
+rf_stack_pred <- ifelse(rf_stack_prob >= 0.5, 1, 0)
+
+confusionMatrix(
+  as.factor(rf_stack_pred),
+  as.factor(stack_test$booking_status),
+  positive = "1"
+)
+
+```
+
+### Summary Table (Including Second-Level Stacked Models)
+
+| Model                               | Accuracy | Kappa  | Sensitivity | Specificity | Balanced Accuracy |
+|-------------------------------------|----------|--------|-------------|-------------|-------------------|
+| **LogReg (Basic)**                  | 0.8122   | 0.5575 | 0.6448      | 0.8933      | 0.7691            |
+| **LogReg (Enhanced)**               | 0.8147   | 0.5601 | 0.6347      | 0.9019      | 0.7683            |
+| **KNN (k = 5)**                     | 0.8383   | 0.6298 | 0.7394      | 0.8862      | 0.8128            |
+| **ANN**                             | 0.7813   | 0.5320 | 0.7864      | 0.7789      | 0.7826            |
+| **Decision Tree**                   | 0.8820   | 0.7284 | 0.7954      | 0.9240      | 0.8597            |
+| **SVM (Basic RBF)**                 | 0.8035   | 0.5584 | 0.7216      | 0.8432      | 0.7824            |
+| **SVM (Enhanced)**                  | 0.8140   | 0.5703 | 0.6842      | 0.8769      | 0.7806            |
+| **Random Forest**                   | **0.8975** | **0.7629** | 0.8089 | **0.9405** | **0.8747** |
+| **Stacked Model (C5.0 w/ Cost Matrix)** | 0.8943 | 0.7556 | 0.8026      | 0.9390      | 0.8708            |
+| **Stacked Model (Random Forest Meta-Model)** | 0.8949 | 0.7582 | **0.8129** | 0.9349 | 0.8739 |
+
+
+
+
+## Step 11: Profit
+
+**Needs to be modified**
+
 Using the financial assumptions from **Step 0**, we can estimate the model’s impact on revenue compared to doing nothing (i.e., no overbooking policy).
 
 ### Confusion Matrix Summary
@@ -297,4 +587,3 @@ There were **3,553 total cancellations (TP + FN)**, resulting in
 
 Even this simple logistic regression adds meaningful value by identifying likely cancellations and allowing profitable overbooking.  
 Future models with higher recall could further reduce lost revenue and increase profitability.
-
