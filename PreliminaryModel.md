@@ -49,12 +49,18 @@ predictable enough to support overbooking decisions.
 
 ### Financial Assumptions
 
-- **Revenue per booked room:** \$300 per night  
+- **Revenue per booked room:** \$250 per night on average price in a
+  city (source:
+  <https://www.coohom.com/article/how-much-do-hotel-rooms-cost>)
 - **Cancellations:** Guests can cancel free of charge at any time; each
-  cancellation results in a \$300 revenue loss.  
+  cancellation results in a \$250 revenue loss (from the cost of the
+  room)  
 - **Overbooking cost:** If the hotel overbooks and cannot accommodate a
-  guest (because no cancellations occur), it incurs \$400 per night in
-  re-accommodation, goodwill, or compensation costs.  
+  guest (because no cancellations occur), it incurs \$500 per night
+  because the cost of walking a guest is ~2x the room cost in
+  re-accommodation, transportation, goodwill, and/or compensation costs.
+  (souce:
+  <https://ecornell-impact.cornell.edu/the-cheapest-and-best-approach-to-overbooking/>)
 - **Variable costs per room:** Considered sunk and excluded from
   analysis (the cost of turning a room is identical regardless of
   occupancy).  
@@ -64,10 +70,10 @@ predictable enough to support overbooking decisions.
 
 | Case | Model Prediction | Actual Outcome | Financial Impact |
 |----|----|----|----|
-| **True Positive (TP)** | “Will Cancel” | Guest cancels | **+ \$300** (revenue from replacement guest) |
+| **True Positive (TP)** | “Will Cancel” | Guest cancels | **+ \$250** (revenue from replacement guest) |
 | **True Negative (TN)** | “Will Not Cancel” | Guest does not cancel | **\$0** (no change in revenue) |
-| **False Negative (FN)** | “Will Not Cancel” | Guest cancels | **– \$300** (lost booking revenue) |
-| **False Positive (FP)** | “Will Cancel” | Guest shows up | **– \$400** (overbooking penalty) |
+| **False Negative (FN)** | “Will Not Cancel” | Guest cancels | **– \$250** (lost booking revenue) |
+| **False Positive (FP)** | “Will Cancel” | Guest shows up | **– \$500** (overbooking penalty) |
 
 ### Objective
 
@@ -931,6 +937,17 @@ plot(m_decision)
 ```
 
 ![](PreliminaryModel_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
+The decision tree relies most heavily on a few key predictors. **Lead
+time** is by far the strongest driver of cancellation behavior,
+appearing in virtually every major split. The model also heavily uses
+**number of special requests**, **repeated guest status**, and **number
+of week nights** to differentiate likely cancellations from reliable
+bookings. Additionally, **price-related features** (such as
+`avg_price_per_room`) and **market segment type** help the tree
+distinguish different types of guests. Overall, the tree prioritizes
+guest commitment indicators (lead time, repeat status), stay
+characteristics (week nights, weekend nights), and booking channel/price
+information to identify cancellation risk.
 
 ### Step 4.5: Build SVM
 
@@ -1010,28 +1027,40 @@ varImpPlot(rf_model)
 ```
 
 ![](PreliminaryModel_files/figure-gfm/unnamed-chunk-14-2.png)<!-- -->
+**Note about what the RF finds important**
 
 ## Step 5: Predict
 
-To generate predictions, we applied a 0.5 threshold (standard).
+In our financial assumptions, a **false positive**—predicting a
+cancellation when the guest actually arrives—incurs a **\$500 walking
+cost**, which is **twice as expensive** as a false negative, where
+failing to predict a cancellation results in only **\$250 of lost
+revenue**. Because the cost of being wrong on a “cancel” prediction is
+substantially higher, we want to be **more conservative** when
+predicting cancellations. Therefore, using the default threshold of 0.5
+would lead to too many false positives and unnecessary walking costs. To
+mitigate this, we adopt a **higher decision threshold** (0.70), ensuring
+we only predict a cancellation when the model is sufficiently confident.
+This approach minimizes expensive false positives while still capturing
+most true cancellations.
 
 ### Step 5.1: Predict LogReg
 
 ``` r
 logreg_prob <- predict(logreg_model, newdata = hotel_test, type = "response")
-pred_logreg <- ifelse(logreg_prob >= 0.5, 1, 0)
+pred_logreg <- ifelse(logreg_prob >= 0.7, 1, 0)
 
 logreg_enh_prob <- predict(logreg_model_enhanced, newdata = hotel_test, type = "response")
-pred_logreg_enh <- ifelse(logreg_enh_prob >= 0.5, 1, 0)
+pred_logreg_enh <- ifelse(logreg_enh_prob >= 0.7, 1, 0)
 ```
 
 ### Step 5.2: Predict KNN Model
 
-Let’s figure out the optimal k value. We want to balance sensitivity and
+Let’s figure out the optimal k value. We want to balance specificity and
 accuracy effectively.
 
 ``` r
-results <- data.frame(k = numeric(), Accuracy = numeric(), Sensitivity = numeric())
+results <- data.frame(k = numeric(), Accuracy = numeric(), Specificity = numeric())
 
 for (k in seq(1, 31, by = 2)) {
   
@@ -1049,7 +1078,7 @@ for (k in seq(1, 31, by = 2)) {
     1 - attr(knn_pred, "prob") 
   )
   
-  knn_binary <- ifelse(knn_prob >= 0.5, 1, 0)
+  knn_binary <- ifelse(knn_prob >= 0.7, 1, 0)
   
   cm <- confusionMatrix(
     as.factor(knn_binary),
@@ -1062,7 +1091,7 @@ for (k in seq(1, 31, by = 2)) {
     data.frame(
       k = k,
       Accuracy = cm$overall["Accuracy"],
-      Sensitivity = cm$byClass["Sensitivity"]
+      Specificity = cm$byClass["Specificity"]
     )
   )
 }
@@ -1070,29 +1099,32 @@ for (k in seq(1, 31, by = 2)) {
 results
 ```
 
-    ##             k  Accuracy Sensitivity
-    ## Accuracy    1 0.8323073   0.7663946
-    ## Accuracy1   3 0.8369935   0.7492260
-    ## Accuracy2   5 0.8382799   0.7450042
-    ## Accuracy3   7 0.8369016   0.7407824
-    ## Accuracy4   9 0.8369016   0.7416268
-    ## Accuracy5  11 0.8335937   0.7416268
-    ## Accuracy6  13 0.8337775   0.7438784
-    ## Accuracy7  15 0.8278967   0.7388123
-    ## Accuracy8  17 0.8312046   0.7379679
-    ## Accuracy9  19 0.8283562   0.7289614
-    ## Accuracy10 21 0.8270697   0.7244582
-    ## Accuracy11 23 0.8262428   0.7202364
-    ## Accuracy12 25 0.8284480   0.7222066
-    ## Accuracy13 27 0.8267941   0.7174219
-    ## Accuracy14 29 0.8238537   0.7134816
-    ## Accuracy15 31 0.8234862   0.7117929
+    ##             k  Accuracy Specificity
+    ## Accuracy    1 0.8331342   0.8680764
+    ## Accuracy1   3 0.8269779   0.9515689
+    ## Accuracy2   5 0.8346963   0.9414734
+    ## Accuracy3   7 0.8385555   0.9342428
+    ## Accuracy4   9 0.8278967   0.9523874
+    ## Accuracy5  11 0.8303777   0.9482947
+    ## Accuracy6  13 0.8185243   0.9611187
+    ## Accuracy7  15 0.8177892   0.9544338
+    ## Accuracy8  17 0.8230267   0.9512960
+    ## Accuracy9  19 0.8139300   0.9587995
+    ## Accuracy10 21 0.8175136   0.9557981
+    ## Accuracy11 23 0.8084168   0.9611187
+    ## Accuracy12 25 0.8090600   0.9583902
+    ## Accuracy13 27 0.8118166   0.9566166
+    ## Accuracy14 29 0.8023523   0.9577080
+    ## Accuracy15 31 0.8042819   0.9557981
 
-Based on KNN tuning results, the optimal value of k = 5 achieves the
-best balance between accuracy (84.5%) and sensitivity (74%). This
-configuration minimizes overfitting while maintaining reliable detection
-of likely cancellations, making it a practical choice for hotel
-overbooking predictions.
+Based on our KNN tuning results, the optimal value of **k = 13**
+achieves the best balance for our business objective. Although its
+overall accuracy is **81.9%**, it delivers the **highest specificity
+(96.1%)** of all tested values. Because false positives (walking guests)
+carry the largest financial penalty in our cost structure, this high
+specificity makes k = 13 the most practical choice for minimizing
+expensive overbooking errors while still maintaining reasonable
+predictive performance.
 
 Let’s build our final model now.
 
@@ -1101,7 +1133,7 @@ knn_final <- knn(
   train = train_features,
   test  = test_features,
   cl    = train_labels,
-  k     = 5,
+  k     = 13,
   prob  = TRUE
 )
 
@@ -1111,21 +1143,21 @@ knn_prob_final <- ifelse(
   1 - attr(knn_final, "prob")
 )
 
-knn_binary_final <- ifelse(knn_prob_final >= 0.5, 1, 0)
+knn_binary_final <- ifelse(knn_prob_final >= 0.7, 1, 0)
 ```
 
 ### Step 5.3: Predict ANN
 
 ``` r
 ann_prob <- predict(ann_model, hotel_test_scaled)
-pred_ann <- ifelse(ann_prob >= 0.5, 1, 0)
+pred_ann <- ifelse(ann_prob >= 0.7, 1, 0)
 ```
 
 ### Step 5.4: Predict Decision Tree
 
 ``` r
 dt_prob <- predict(m_decision, hotel_test, type = "prob")[, "1"]
-pred_dt <- ifelse(dt_prob >= 0.5, 1, 0)
+pred_dt <- ifelse(dt_prob >= 0.7, 1, 0)
 ```
 
 ### Step 5.5: Predict SVM
@@ -1135,7 +1167,7 @@ Basic SVM
 ``` r
 svm_rbf_prob <- predict(hotel_svm_basic, hotel_test_scaled, type = "probabilities")
 svm_rbf_prob_class1 <- svm_rbf_prob[, "1"]
-pred_svm_basic <- ifelse(svm_rbf_prob_class1 >= 0.5, 1, 0)
+pred_svm_basic <- ifelse(svm_rbf_prob_class1 >= 0.7, 1, 0)
 ```
 
 Enhanced SVM
@@ -1143,14 +1175,14 @@ Enhanced SVM
 ``` r
 svm_rbf_enhanced <- predict(hotel_svm_enhanced, hotel_test_scaled, type = "probabilities")
 svm_rbf_enhanced_class1 <- svm_rbf_enhanced[, "1"]
-pred_svm_enhanced <- ifelse(svm_rbf_enhanced_class1 >= 0.5, 1, 0)
+pred_svm_enhanced <- ifelse(svm_rbf_enhanced_class1 >= 0.7, 1, 0)
 ```
 
 ### Step 5.6: Predict Random Forest
 
 ``` r
 rf_prob <- predict(rf_model, hotel_test, type = "prob")[, "1"]
-pred_rf <- ifelse(rf_prob >= 0.5, 1, 0)
+pred_rf <- ifelse(rf_prob >= 0.7, 1, 0)
 ```
 
 ## Step 6: Evaluate
@@ -1167,43 +1199,37 @@ confusionMatrix(as.factor(pred_logreg), as.factor(hotel_test$booking_status), po
     ## 
     ##           Reference
     ## Prediction    0    1
-    ##          0 6548 1262
-    ##          1  782 2291
+    ##          0 7011 2110
+    ##          1  319 1443
     ##                                           
-    ##                Accuracy : 0.8122          
-    ##                  95% CI : (0.8047, 0.8195)
+    ##                Accuracy : 0.7768          
+    ##                  95% CI : (0.7689, 0.7846)
     ##     No Information Rate : 0.6735          
     ##     P-Value [Acc > NIR] : < 2.2e-16       
     ##                                           
-    ##                   Kappa : 0.5575          
+    ##                   Kappa : 0.4167          
     ##                                           
     ##  Mcnemar's Test P-Value : < 2.2e-16       
     ##                                           
-    ##             Sensitivity : 0.6448          
-    ##             Specificity : 0.8933          
-    ##          Pos Pred Value : 0.7455          
-    ##          Neg Pred Value : 0.8384          
+    ##             Sensitivity : 0.4061          
+    ##             Specificity : 0.9565          
+    ##          Pos Pred Value : 0.8190          
+    ##          Neg Pred Value : 0.7687          
     ##              Prevalence : 0.3265          
-    ##          Detection Rate : 0.2105          
-    ##    Detection Prevalence : 0.2824          
-    ##       Balanced Accuracy : 0.7691          
+    ##          Detection Rate : 0.1326          
+    ##    Detection Prevalence : 0.1619          
+    ##       Balanced Accuracy : 0.6813          
     ##                                           
     ##        'Positive' Class : 1               
     ## 
 
-The baseline logistic regression model achieved an **accuracy of
-81.5%**, meaning it correctly classified roughly four out of five
-reservations.  
-The model’s **sensitivity (65%)** indicates that it successfully
-identified about two-thirds of actual cancellations, while its
-**specificity (89%)** shows strong performance in recognizing
-non-cancellations.  
-This balance suggests the model is slightly conservative—it’s better at
-avoiding false alarms (predicting cancellations that don’t happen) than
-at catching every cancellation.  
-For a hotel aiming to minimize overbooking costs, this trade-off is
-acceptable for out vanilla model, though future tuning will hopefully
-allow us to improve recall in order to maximize profits.
+The baseline logistic regression model achieved an accuracy of
+**77.7%**, meaning it correctly classified a little over three out of
+every four reservations. However, its performance is highly unbalanced
+across classes. The model’s **sensitivity is only 40.6%**, meaning it
+detects fewer than half of all true cancellations. In contrast, its
+**specificity is very high at 95.6%**, indicating that it is excellent
+at correctly identifying guests who will *not* cancel.
 
 Enhanced LogReg
 
@@ -1215,62 +1241,63 @@ confusionMatrix(as.factor(pred_logreg_enh), as.factor(hotel_test$booking_status)
     ## 
     ##           Reference
     ## Prediction    0    1
-    ##          0 6611 1298
-    ##          1  719 2255
+    ##          0 7058 2029
+    ##          1  272 1524
     ##                                           
-    ##                Accuracy : 0.8147          
-    ##                  95% CI : (0.8072, 0.8219)
+    ##                Accuracy : 0.7886          
+    ##                  95% CI : (0.7808, 0.7962)
     ##     No Information Rate : 0.6735          
     ##     P-Value [Acc > NIR] : < 2.2e-16       
     ##                                           
-    ##                   Kappa : 0.5601          
+    ##                   Kappa : 0.449           
     ##                                           
     ##  Mcnemar's Test P-Value : < 2.2e-16       
     ##                                           
-    ##             Sensitivity : 0.6347          
-    ##             Specificity : 0.9019          
-    ##          Pos Pred Value : 0.7582          
-    ##          Neg Pred Value : 0.8359          
+    ##             Sensitivity : 0.4289          
+    ##             Specificity : 0.9629          
+    ##          Pos Pred Value : 0.8486          
+    ##          Neg Pred Value : 0.7767          
     ##              Prevalence : 0.3265          
-    ##          Detection Rate : 0.2072          
-    ##    Detection Prevalence : 0.2733          
-    ##       Balanced Accuracy : 0.7683          
+    ##          Detection Rate : 0.1400          
+    ##    Detection Prevalence : 0.1650          
+    ##       Balanced Accuracy : 0.6959          
     ##                                           
     ##        'Positive' Class : 1               
     ## 
 
-Very similar, but we will choose enhanced.
+Very similar, but we will choose enhanced. Better Accuracy, sensitivity,
+specificity, kappa, balanced accuracy.
 
 ### Step 6.2: Evaluate KNN Model
 
 ``` r
-confusionMatrix(as.factor(knn_binary_final), as.factor(hotel_test_scaled$booking_status), positive = "1")
+confusionMatrix(as.factor(knn_binary_final), as.factor(test_labels), positive = "1")
 ```
 
     ## Confusion Matrix and Statistics
     ## 
     ##           Reference
     ## Prediction    0    1
-    ##          0 6476  906
-    ##          1  854 2647
+    ##          0 7045 1690
+    ##          1  285 1863
     ##                                           
-    ##                Accuracy : 0.8383          
-    ##                  95% CI : (0.8312, 0.8452)
+    ##                Accuracy : 0.8185          
+    ##                  95% CI : (0.8112, 0.8257)
     ##     No Information Rate : 0.6735          
-    ##     P-Value [Acc > NIR] : <2e-16          
+    ##     P-Value [Acc > NIR] : < 2.2e-16       
     ##                                           
-    ##                   Kappa : 0.6309          
+    ##                   Kappa : 0.5405          
     ##                                           
-    ##  Mcnemar's Test P-Value : 0.2241          
+    ##  Mcnemar's Test P-Value : < 2.2e-16       
     ##                                           
-    ##             Sensitivity : 0.7450          
-    ##             Specificity : 0.8835          
-    ##          Pos Pred Value : 0.7561          
-    ##          Neg Pred Value : 0.8773          
+    ##             Sensitivity : 0.5243          
+    ##             Specificity : 0.9611          
+    ##          Pos Pred Value : 0.8673          
+    ##          Neg Pred Value : 0.8065          
     ##              Prevalence : 0.3265          
-    ##          Detection Rate : 0.2432          
-    ##    Detection Prevalence : 0.3217          
-    ##       Balanced Accuracy : 0.8142          
+    ##          Detection Rate : 0.1712          
+    ##    Detection Prevalence : 0.1974          
+    ##       Balanced Accuracy : 0.7427          
     ##                                           
     ##        'Positive' Class : 1               
     ## 
@@ -1285,28 +1312,28 @@ confusionMatrix(as.factor(pred_ann), as.factor(hotel_test_scaled$booking_status)
     ## 
     ##           Reference
     ## Prediction    0    1
-    ##          0 5709  759
-    ##          1 1621 2794
-    ##                                          
-    ##                Accuracy : 0.7813         
-    ##                  95% CI : (0.7734, 0.789)
-    ##     No Information Rate : 0.6735         
-    ##     P-Value [Acc > NIR] : < 2.2e-16      
-    ##                                          
-    ##                   Kappa : 0.532          
-    ##                                          
-    ##  Mcnemar's Test P-Value : < 2.2e-16      
-    ##                                          
-    ##             Sensitivity : 0.7864         
-    ##             Specificity : 0.7789         
-    ##          Pos Pred Value : 0.6328         
-    ##          Neg Pred Value : 0.8827         
-    ##              Prevalence : 0.3265         
-    ##          Detection Rate : 0.2567         
-    ##    Detection Prevalence : 0.4057         
-    ##       Balanced Accuracy : 0.7826         
-    ##                                          
-    ##        'Positive' Class : 1              
+    ##          0 6683 1434
+    ##          1  647 2119
+    ##                                           
+    ##                Accuracy : 0.8088          
+    ##                  95% CI : (0.8013, 0.8161)
+    ##     No Information Rate : 0.6735          
+    ##     P-Value [Acc > NIR] : < 2.2e-16       
+    ##                                           
+    ##                   Kappa : 0.5389          
+    ##                                           
+    ##  Mcnemar's Test P-Value : < 2.2e-16       
+    ##                                           
+    ##             Sensitivity : 0.5964          
+    ##             Specificity : 0.9117          
+    ##          Pos Pred Value : 0.7661          
+    ##          Neg Pred Value : 0.8233          
+    ##              Prevalence : 0.3265          
+    ##          Detection Rate : 0.1947          
+    ##    Detection Prevalence : 0.2542          
+    ##       Balanced Accuracy : 0.7541          
+    ##                                           
+    ##        'Positive' Class : 1               
     ## 
 
 ### Step 6.4: Evaluate Decision Tree
@@ -1319,28 +1346,28 @@ confusionMatrix(as.factor(pred_dt), as.factor(hotel_test$booking_status), positi
     ## 
     ##           Reference
     ## Prediction    0    1
-    ##          0 6773  727
-    ##          1  557 2826
-    ##                                          
-    ##                Accuracy : 0.882          
-    ##                  95% CI : (0.8758, 0.888)
-    ##     No Information Rate : 0.6735         
-    ##     P-Value [Acc > NIR] : < 2.2e-16      
-    ##                                          
-    ##                   Kappa : 0.7284         
-    ##                                          
-    ##  Mcnemar's Test P-Value : 2.401e-06      
-    ##                                          
-    ##             Sensitivity : 0.7954         
-    ##             Specificity : 0.9240         
-    ##          Pos Pred Value : 0.8354         
-    ##          Neg Pred Value : 0.9031         
-    ##              Prevalence : 0.3265         
-    ##          Detection Rate : 0.2597         
-    ##    Detection Prevalence : 0.3109         
-    ##       Balanced Accuracy : 0.8597         
-    ##                                          
-    ##        'Positive' Class : 1              
+    ##          0 6945  924
+    ##          1  385 2629
+    ##                                           
+    ##                Accuracy : 0.8797          
+    ##                  95% CI : (0.8735, 0.8858)
+    ##     No Information Rate : 0.6735          
+    ##     P-Value [Acc > NIR] : < 2.2e-16       
+    ##                                           
+    ##                   Kappa : 0.7154          
+    ##                                           
+    ##  Mcnemar's Test P-Value : < 2.2e-16       
+    ##                                           
+    ##             Sensitivity : 0.7399          
+    ##             Specificity : 0.9475          
+    ##          Pos Pred Value : 0.8723          
+    ##          Neg Pred Value : 0.8826          
+    ##              Prevalence : 0.3265          
+    ##          Detection Rate : 0.2416          
+    ##    Detection Prevalence : 0.2769          
+    ##       Balanced Accuracy : 0.8437          
+    ##                                           
+    ##        'Positive' Class : 1               
     ## 
 
 ### Step 6.5: Evaluate SVM
@@ -1355,28 +1382,28 @@ confusionMatrix(as.factor(pred_svm_basic), as.factor(hotel_test_scaled$booking_s
     ## 
     ##           Reference
     ## Prediction    0    1
-    ##          0 6181  989
-    ##          1 1149 2564
-    ##                                         
-    ##                Accuracy : 0.8035        
-    ##                  95% CI : (0.796, 0.811)
-    ##     No Information Rate : 0.6735        
-    ##     P-Value [Acc > NIR] : < 2.2e-16     
-    ##                                         
-    ##                   Kappa : 0.5584        
-    ##                                         
-    ##  Mcnemar's Test P-Value : 0.0005845     
-    ##                                         
-    ##             Sensitivity : 0.7216        
-    ##             Specificity : 0.8432        
-    ##          Pos Pred Value : 0.6905        
-    ##          Neg Pred Value : 0.8621        
-    ##              Prevalence : 0.3265        
-    ##          Detection Rate : 0.2356        
-    ##    Detection Prevalence : 0.3412        
-    ##       Balanced Accuracy : 0.7824        
-    ##                                         
-    ##        'Positive' Class : 1             
+    ##          0 6616 1335
+    ##          1  714 2218
+    ##                                          
+    ##                Accuracy : 0.8117         
+    ##                  95% CI : (0.8043, 0.819)
+    ##     No Information Rate : 0.6735         
+    ##     P-Value [Acc > NIR] : < 2.2e-16      
+    ##                                          
+    ##                   Kappa : 0.5517         
+    ##                                          
+    ##  Mcnemar's Test P-Value : < 2.2e-16      
+    ##                                          
+    ##             Sensitivity : 0.6243         
+    ##             Specificity : 0.9026         
+    ##          Pos Pred Value : 0.7565         
+    ##          Neg Pred Value : 0.8321         
+    ##              Prevalence : 0.3265         
+    ##          Detection Rate : 0.2038         
+    ##    Detection Prevalence : 0.2694         
+    ##       Balanced Accuracy : 0.7634         
+    ##                                          
+    ##        'Positive' Class : 1              
     ## 
 
 Enhanced SVM
@@ -1389,31 +1416,31 @@ confusionMatrix(as.factor(pred_svm_enhanced), as.factor(hotel_test_scaled$bookin
     ## 
     ##           Reference
     ## Prediction    0    1
-    ##          0 6428 1122
-    ##          1  902 2431
-    ##                                           
-    ##                Accuracy : 0.814           
-    ##                  95% CI : (0.8066, 0.8213)
-    ##     No Information Rate : 0.6735          
-    ##     P-Value [Acc > NIR] : < 2.2e-16       
-    ##                                           
-    ##                   Kappa : 0.5703          
-    ##                                           
-    ##  Mcnemar's Test P-Value : 1.128e-06       
-    ##                                           
-    ##             Sensitivity : 0.6842          
-    ##             Specificity : 0.8769          
-    ##          Pos Pred Value : 0.7294          
-    ##          Neg Pred Value : 0.8514          
-    ##              Prevalence : 0.3265          
-    ##          Detection Rate : 0.2234          
-    ##    Detection Prevalence : 0.3063          
-    ##       Balanced Accuracy : 0.7806          
-    ##                                           
-    ##        'Positive' Class : 1               
+    ##          0 6799 1435
+    ##          1  531 2118
+    ##                                          
+    ##                Accuracy : 0.8194         
+    ##                  95% CI : (0.812, 0.8265)
+    ##     No Information Rate : 0.6735         
+    ##     P-Value [Acc > NIR] : < 2.2e-16      
+    ##                                          
+    ##                   Kappa : 0.5604         
+    ##                                          
+    ##  Mcnemar's Test P-Value : < 2.2e-16      
+    ##                                          
+    ##             Sensitivity : 0.5961         
+    ##             Specificity : 0.9276         
+    ##          Pos Pred Value : 0.7995         
+    ##          Neg Pred Value : 0.8257         
+    ##              Prevalence : 0.3265         
+    ##          Detection Rate : 0.1946         
+    ##    Detection Prevalence : 0.2434         
+    ##       Balanced Accuracy : 0.7618         
+    ##                                          
+    ##        'Positive' Class : 1              
     ## 
 
-Enhanced better. better accuracy, kappa, same balanced accuracy.
+Enhanced better. better accuracy, kappa, specificity.
 
 ### Step 6.6: Evaluate Random Forest
 
@@ -1425,26 +1452,26 @@ confusionMatrix(as.factor(pred_rf), as.factor(hotel_test$booking_status), positi
     ## 
     ##           Reference
     ## Prediction    0    1
-    ##          0 6894  679
-    ##          1  436 2874
+    ##          0 7112 1029
+    ##          1  218 2524
     ##                                           
-    ##                Accuracy : 0.8975          
-    ##                  95% CI : (0.8917, 0.9032)
+    ##                Accuracy : 0.8854          
+    ##                  95% CI : (0.8793, 0.8913)
     ##     No Information Rate : 0.6735          
     ##     P-Value [Acc > NIR] : < 2.2e-16       
     ##                                           
-    ##                   Kappa : 0.7629          
+    ##                   Kappa : 0.7232          
     ##                                           
-    ##  Mcnemar's Test P-Value : 4.251e-13       
+    ##  Mcnemar's Test P-Value : < 2.2e-16       
     ##                                           
-    ##             Sensitivity : 0.8089          
-    ##             Specificity : 0.9405          
-    ##          Pos Pred Value : 0.8683          
-    ##          Neg Pred Value : 0.9103          
+    ##             Sensitivity : 0.7104          
+    ##             Specificity : 0.9703          
+    ##          Pos Pred Value : 0.9205          
+    ##          Neg Pred Value : 0.8736          
     ##              Prevalence : 0.3265          
-    ##          Detection Rate : 0.2641          
-    ##    Detection Prevalence : 0.3041          
-    ##       Balanced Accuracy : 0.8747          
+    ##          Detection Rate : 0.2319          
+    ##    Detection Prevalence : 0.2520          
+    ##       Balanced Accuracy : 0.8403          
     ##                                           
     ##        'Positive' Class : 1               
     ## 
@@ -1452,17 +1479,17 @@ confusionMatrix(as.factor(pred_rf), as.factor(hotel_test$booking_status), positi
 ### Summary Table
 
 | Model | Accuracy | Kappa | Sensitivity | Specificity | Balanced Accuracy |
-|----|----|----|----|----|----|
-| **LogReg (Basic)** | 0.8122 | 0.5575 | 0.6448 | 0.8933 | 0.7691 |
-| **LogReg (Enhanced)** | 0.8147 | 0.5601 | 0.6347 | 0.9019 | 0.7683 |
-| **KNN (k = 5)** | 0.8383 | 0.6298 | 0.7394 | 0.8862 | 0.8128 |
-| **ANN** | 0.7813 | 0.5320 | 0.7864 | 0.7789 | 0.7826 |
-| **Decision Tree** | 0.8820 | 0.7284 | 0.7954 | 0.9240 | 0.8597 |
-| **SVM (Basic RBF)** | 0.8035 | 0.5584 | 0.7216 | 0.8432 | 0.7824 |
-| **SVM (Enhanced)** | 0.8140 | 0.5703 | 0.6842 | 0.8769 | 0.7806 |
-| **Random Forest** | **0.8975** | **0.7629** | **0.8089** | **0.9405** | **0.8747** |
+|----|---:|---:|---:|---:|---:|
+| LogReg (Basic) | 0.7768 | 0.4167 | 0.4061 | 0.9565 | 0.6813 |
+| LogReg (Enhanced) | 0.7886 | 0.4490 | 0.4289 | 0.9629 | 0.6959 |
+| KNN (Final, threshold 0.7) | 0.8185 | 0.5405 | 0.5243 | 0.9611 | 0.7427 |
+| ANN | 0.8088 | 0.5389 | 0.5964 | 0.9117 | 0.7541 |
+| Decision Tree | 0.8797 | 0.7154 | **0.7399** | 0.9475 | **0.8437** |
+| SVM (Basic) | 0.8117 | 0.5517 | 0.6243 | 0.9026 | 0.7634 |
+| SVM (Enhanced) | 0.8194 | 0.5604 | 0.5961 | 0.9276 | 0.7618 |
+| Random Forest | **0.8854** | **0.7232** | 0.7104 | **0.9703** | 0.8403 |
 
-Random Forest clearly the best
+RF and DT stand out from the rest.
 
 ## Step 7: Build Second Level Model Dataset
 
@@ -1480,13 +1507,13 @@ stacked_data <- data.frame(
 head(stacked_data)
 ```
 
-    ##       logreg knn       ann decision_tree        svm random_forest
-    ## 1  0.2713635 0.0 0.5811059   0.053125396 0.20301957         0.054
-    ## 7  0.1166368 0.0 0.1915040   0.169243873 0.07748765         0.016
-    ## 8  0.2401012 0.0 0.4445186   0.006908412 0.36975747         0.034
-    ## 12 0.1900378 0.4 0.3893187   0.164549093 0.15716337         0.094
-    ## 25 0.4886667 0.0 0.5809394   0.164549093 0.11338696         0.050
-    ## 26 0.4174350 0.2 0.5290343   0.164549093 0.26261618         0.082
+    ##       logreg        knn       ann decision_tree        svm random_forest
+    ## 1  0.2713635 0.00000000 0.5811059   0.053125396 0.20301957         0.054
+    ## 7  0.1166368 0.07692308 0.1915040   0.169243873 0.07748765         0.016
+    ## 8  0.2401012 0.07692308 0.4445186   0.006908412 0.36975747         0.034
+    ## 12 0.1900378 0.38461538 0.3893187   0.164549093 0.15716337         0.094
+    ## 25 0.4886667 0.07692308 0.5809394   0.164549093 0.11338696         0.050
+    ## 26 0.4174350 0.23076923 0.5290343   0.164549093 0.26261618         0.082
     ##    booking_status
     ## 1               0
     ## 7               0
@@ -1510,18 +1537,27 @@ stack_test  <- stacked_data[-trainrows, ]
 ### Step 9.1: Build Decision Tree with Cost Matrix
 
 ``` r
-cost_matrix <- matrix(c(0, 400, 300, 0), nrow = 2)
+model_stack_nocost <- C5.0(
+  x = stack_train[, -which(colnames(stack_train) == "booking_status")],
+  y = as.factor(stack_train$booking_status)
+)
+```
+
+### Step 9.2: Build Decision Tree with Cost Matrix
+
+``` r
+cost_matrix <- matrix(c(0, 500, 250, 0), nrow = 2)
 cost_matrix
 ```
 
     ##      [,1] [,2]
-    ## [1,]    0  300
-    ## [2,]  400    0
+    ## [1,]    0  250
+    ## [2,]  500    0
 
 Build Decision Tree
 
 ``` r
-model_stack <- C5.0(
+model_stack_cost <- C5.0(
   x = stack_train[, -which(colnames(stack_train) == "booking_status")],
   y = as.factor(stack_train$booking_status),
   costs = cost_matrix
@@ -1531,28 +1567,38 @@ model_stack <- C5.0(
     ## Warning: no dimnames were given for the cost matrix; the factor levels will be
     ## used
 
-### Step 9.2: Build Random Forest with Class Weights
+### Step 9.3: Build Random Forest without Class Weights
 
 ``` r
-classwt = c("0" = 400, "1" = 300)
+rf_stack_nocost <- randomForest(
+  x = stack_train[, -which(colnames(stack_train) == "booking_status")],
+  y = as.factor(stack_train$booking_status),
+  ntree = 500,
+  mtry = sqrt(ncol(stack_train) - 1)
+)
+```
+
+### Step 9.4: Build Random Forest with Class Weights
+
+``` r
 rf_stack <- randomForest(
   x = stack_train[, -which(colnames(stack_train) == "booking_status")],
   y = as.factor(stack_train$booking_status),
   ntree = 500,
   mtry = sqrt(ncol(stack_train) - 1),
-  classwt = c("0" = 400, "1" = 300)
+  classwt = c("0" = 500, "1" = 250)
 )
 ```
 
 ## Step 10: Predict and Evaluate
 
-### Step 10.1: Predict/Evaluate Decision Tree
+### Step 10.1: Predict/Evaluate Decision Tree without Cost Matrix
 
 ``` r
-stack_pred_class <- predict(model_stack, stack_test, type = "class")
-
+dt_no_cost_prob <- predict(model_stack_nocost, stack_test, type = "prob")[, "1"]
+dt_no_cost_pred <- ifelse(dt_no_cost_prob >= 0.7, 1, 0)
 confusionMatrix(
-  as.factor(stack_pred_class),
+  as.factor(dt_no_cost_pred),
   as.factor(stack_test$booking_status),
   positive = "1"
 )
@@ -1562,31 +1608,116 @@ confusionMatrix(
     ## 
     ##           Reference
     ## Prediction    0    1
-    ##          0 2062  211
-    ##          1  134  858
+    ##          0 2055  202
+    ##          1  141  867
     ##                                           
-    ##                Accuracy : 0.8943          
-    ##                  95% CI : (0.8833, 0.9047)
+    ##                Accuracy : 0.8949          
+    ##                  95% CI : (0.8839, 0.9053)
     ##     No Information Rate : 0.6726          
     ##     P-Value [Acc > NIR] : < 2.2e-16       
     ##                                           
-    ##                   Kappa : 0.7556          
+    ##                   Kappa : 0.7579          
     ##                                           
-    ##  Mcnemar's Test P-Value : 4.282e-05       
+    ##  Mcnemar's Test P-Value : 0.001197        
     ##                                           
-    ##             Sensitivity : 0.8026          
-    ##             Specificity : 0.9390          
-    ##          Pos Pred Value : 0.8649          
-    ##          Neg Pred Value : 0.9072          
+    ##             Sensitivity : 0.8110          
+    ##             Specificity : 0.9358          
+    ##          Pos Pred Value : 0.8601          
+    ##          Neg Pred Value : 0.9105          
     ##              Prevalence : 0.3274          
-    ##          Detection Rate : 0.2628          
-    ##    Detection Prevalence : 0.3038          
-    ##       Balanced Accuracy : 0.8708          
+    ##          Detection Rate : 0.2655          
+    ##    Detection Prevalence : 0.3087          
+    ##       Balanced Accuracy : 0.8734          
     ##                                           
     ##        'Positive' Class : 1               
     ## 
 
-### Step 10.2: Predict/Evaluate Random Forest
+### Step 10.2: Predict/Evaluate Decision Tree with Cost Matrix
+
+``` r
+dt_cost <- predict(model_stack_cost, stack_test, type = "class")
+
+confusionMatrix(
+  as.factor(dt_cost),
+  as.factor(stack_test$booking_status),
+  positive = "1"
+)
+```
+
+    ## Confusion Matrix and Statistics
+    ## 
+    ##           Reference
+    ## Prediction    0    1
+    ##          0 2104  276
+    ##          1   92  793
+    ##                                           
+    ##                Accuracy : 0.8873          
+    ##                  95% CI : (0.8759, 0.8979)
+    ##     No Information Rate : 0.6726          
+    ##     P-Value [Acc > NIR] : < 2.2e-16       
+    ##                                           
+    ##                   Kappa : 0.7323          
+    ##                                           
+    ##  Mcnemar's Test P-Value : < 2.2e-16       
+    ##                                           
+    ##             Sensitivity : 0.7418          
+    ##             Specificity : 0.9581          
+    ##          Pos Pred Value : 0.8960          
+    ##          Neg Pred Value : 0.8840          
+    ##              Prevalence : 0.3274          
+    ##          Detection Rate : 0.2429          
+    ##    Detection Prevalence : 0.2711          
+    ##       Balanced Accuracy : 0.8500          
+    ##                                           
+    ##        'Positive' Class : 1               
+    ## 
+
+### Step 10.3: Predict/Evaluate Random Forest without Costs
+
+We threshold at 0.7.
+
+``` r
+rf_stack_nocost_prob <- predict(rf_stack_nocost, stack_test, type = "prob")[, "1"]
+rf_stack_nocost_pred <- ifelse(rf_stack_nocost_prob >= 0.7, 1, 0)
+
+confusionMatrix(
+  as.factor(rf_stack_nocost_pred),
+  as.factor(stack_test$booking_status),
+  positive = "1"
+)
+```
+
+    ## Confusion Matrix and Statistics
+    ## 
+    ##           Reference
+    ## Prediction    0    1
+    ##          0 2121  290
+    ##          1   75  779
+    ##                                           
+    ##                Accuracy : 0.8882          
+    ##                  95% CI : (0.8769, 0.8988)
+    ##     No Information Rate : 0.6726          
+    ##     P-Value [Acc > NIR] : < 2.2e-16       
+    ##                                           
+    ##                   Kappa : 0.7324          
+    ##                                           
+    ##  Mcnemar's Test P-Value : < 2.2e-16       
+    ##                                           
+    ##             Sensitivity : 0.7287          
+    ##             Specificity : 0.9658          
+    ##          Pos Pred Value : 0.9122          
+    ##          Neg Pred Value : 0.8797          
+    ##              Prevalence : 0.3274          
+    ##          Detection Rate : 0.2386          
+    ##    Detection Prevalence : 0.2616          
+    ##       Balanced Accuracy : 0.8473          
+    ##                                           
+    ##        'Positive' Class : 1               
+    ## 
+
+### Step 10.4: Predict/Evaluate Random Forest with Costs
+
+Since costs are already incorporated, we threshold at 0.5.
 
 ``` r
 rf_stack_prob <- predict(rf_stack, stack_test, type = "prob")[, "1"]
@@ -1603,89 +1734,108 @@ confusionMatrix(
     ## 
     ##           Reference
     ## Prediction    0    1
-    ##          0 2053  200
-    ##          1  143  869
+    ##          0 2057  204
+    ##          1  139  865
     ##                                           
     ##                Accuracy : 0.8949          
     ##                  95% CI : (0.8839, 0.9053)
     ##     No Information Rate : 0.6726          
     ##     P-Value [Acc > NIR] : < 2.2e-16       
     ##                                           
-    ##                   Kappa : 0.7582          
+    ##                   Kappa : 0.7577          
     ##                                           
-    ##  Mcnemar's Test P-Value : 0.002497        
+    ##  Mcnemar's Test P-Value : 0.0005489       
     ##                                           
-    ##             Sensitivity : 0.8129          
-    ##             Specificity : 0.9349          
-    ##          Pos Pred Value : 0.8587          
-    ##          Neg Pred Value : 0.9112          
+    ##             Sensitivity : 0.8092          
+    ##             Specificity : 0.9367          
+    ##          Pos Pred Value : 0.8616          
+    ##          Neg Pred Value : 0.9098          
     ##              Prevalence : 0.3274          
-    ##          Detection Rate : 0.2662          
-    ##    Detection Prevalence : 0.3100          
-    ##       Balanced Accuracy : 0.8739          
+    ##          Detection Rate : 0.2649          
+    ##    Detection Prevalence : 0.3075          
+    ##       Balanced Accuracy : 0.8729          
     ##                                           
     ##        'Positive' Class : 1               
     ## 
 
-### Summary Table (Including Second-Level Stacked Models)
+### Summary Table (Including Stacked Models)
 
 | Model | Accuracy | Kappa | Sensitivity | Specificity | Balanced Accuracy |
-|----|----|----|----|----|----|
-| **LogReg (Basic)** | 0.8122 | 0.5575 | 0.6448 | 0.8933 | 0.7691 |
-| **LogReg (Enhanced)** | 0.8147 | 0.5601 | 0.6347 | 0.9019 | 0.7683 |
-| **KNN (k = 5)** | 0.8383 | 0.6298 | 0.7394 | 0.8862 | 0.8128 |
-| **ANN** | 0.7813 | 0.5320 | 0.7864 | 0.7789 | 0.7826 |
-| **Decision Tree** | 0.8820 | 0.7284 | 0.7954 | 0.9240 | 0.8597 |
-| **SVM (Basic RBF)** | 0.8035 | 0.5584 | 0.7216 | 0.8432 | 0.7824 |
-| **SVM (Enhanced)** | 0.8140 | 0.5703 | 0.6842 | 0.8769 | 0.7806 |
-| **Random Forest** | **0.8975** | **0.7629** | 0.8089 | **0.9405** | **0.8747** |
-| **Stacked Model (C5.0 w/ Cost Matrix)** | 0.8943 | 0.7556 | 0.8026 | 0.9390 | 0.8708 |
-| **Stacked Model (Random Forest Meta-Model)** | 0.8949 | 0.7582 | **0.8129** | 0.9349 | 0.8739 |
+|----|---:|---:|---:|---:|---:|
+| LogReg (Basic) | 0.7768 | 0.4167 | 0.4061 | 0.9565 | 0.6813 |
+| LogReg (Enhanced) | 0.7886 | 0.4490 | 0.4289 | 0.9629 | 0.6959 |
+| KNN (Final, threshold 0.7) | 0.8185 | 0.5405 | 0.5243 | 0.9611 | 0.7427 |
+| ANN | 0.8088 | 0.5389 | 0.5964 | 0.9117 | 0.7541 |
+| Decision Tree (Base) | 0.8797 | 0.7154 | 0.7399 | 0.9475 | 0.8437 |
+| SVM (Basic) | 0.8117 | 0.5517 | 0.6243 | 0.9026 | 0.7634 |
+| SVM (Enhanced) | 0.8194 | 0.5604 | 0.5961 | 0.9276 | 0.7618 |
+| Random Forest (Base) | 0.8854 | 0.7232 | 0.7104 | 0.9703 | 0.8403 |
+| Stacked DT (No Cost, thr = 0.7) | **0.8949** | **0.7579** | **0.8110** | 0.9358 | **0.8734** |
+| Stacked DT (Cost Matrix) | 0.8873 | 0.7323 | 0.7418 | 0.9581 | 0.8500 |
+| Stacked RF (No Cost, thr = 0.7) | 0.8882 | 0.7324 | 0.7287 | **0.9658** | 0.8473 |
+| Stacked RF (Cost Weighted) | \*\*0.8949\* | 0.7577 | 0.8092 | 0.9367 | 0.8729 |
 
 ## Step 11: Profit
 
-**Needs to be modified**
+### Confusion Matrix
 
-Using the financial assumptions from **Step 0**, we can estimate the
-model’s impact on revenue compared to doing nothing (i.e., no
-overbooking policy).
+| Case | Model Prediction | Actual Outcome | Financial Impact |
+|----|----|----|----|
+| **True Positive (TP)** | “Will Cancel” | Guest cancels | **+ \$250** (revenue from replacement guest) |
+| **True Negative (TN)** | “Will Not Cancel” | Guest does not cancel | **\$0** (no change in revenue) |
+| **False Negative (FN)** | “Will Not Cancel” | Guest cancels | **– \$250** (lost booking revenue) |
+| **False Positive (FP)** | “Will Cancel” | Guest shows up | **– \$500** (overbooking penalty) |
 
-### Confusion Matrix Summary
-
-| Outcome | Count | Description |
-|----|----|----|
-| **True Positives (TP)** | 2,291 | Predicted “will cancel” and guest did cancel |
-| **True Negatives (TN)** | 6,548 | Predicted “will not cancel” and guest did not cancel |
-| **False Positives (FP)** | 782 | Predicted “will cancel” but guest showed up |
-| **False Negatives (FN)** | 1,262 | Predicted “will not cancel” but guest canceled |
-
-### Financial Impact
-
-| Case   | Profit / Loss per Case | Count | Total Impact |
-|--------|------------------------|-------|--------------|
-| **TP** | +\$300                 | 2,291 | +\$687,300   |
-| **TN** | \$0                    | 6,548 | \$0          |
-| **FP** | –\$400                 | 782   | –\$312,800   |
-| **FN** | –\$300                 | 1,262 | –\$378,600   |
-
-**Total Expected Profit = \$687,300 – \$312,800 – \$368,600 =
--\$13,100**
+Profit Formula: 250 \* TP - 250 \* FN - 500 \* FP
 
 ### Baseline Comparison (Before Model)
 
 If the hotel does **no overbooking**, every canceled booking represents
 a loss of \$300.  
 There were **3,553 total cancellations (TP + FN)**, resulting in  
-**Baseline Profit = 3,553 × (–\$300) = –\$1,065,900**
+**Baseline Profit = 3,553 × (–\$250) = –\$888,250**
 
-### Interpretation
+### Profit Comparison Table — Base Models
 
-- **Without the model:** expected loss of \$1,065,900  
-- **With the model:** expected loss of \$13,100  
-- an overall **improvement of about \$1,052,800** in expected revenue on
-  the test sample.
+| Model | TN | FP | FN | TP | Profit Calculation | Raw Profit |
+|----|----|----|----|----|----|----|
+| LogReg (Basic) | 7011 | 319 | 2110 | 1443 | 1443×250 – 319×500 – 2110×250 = 360,750 – 159,500 – 527,500 | –326,250 |
+| LogReg (Enhanced) | 7058 | 272 | 2029 | 1524 | 1524×250 – 272×500 – 2029×250 = 381,000 – 136,000 – 507,250 | –262,250 |
+| KNN (0.7) | 7045 | 285 | 1690 | 1863 | 1863×250 – 285×500 – 1690×250 = 465,750 – 142,500 – 422,500 | –99,250 |
+| ANN | 6683 | 647 | 1434 | 2119 | 2119×250 – 647×500 – 1434×250 = 529,750 – 323,500 – 358,500 | –152,250 |
+| Decision Tree (Base) | 6945 | 385 | 924 | 2629 | 2629×250 – 385×500 – 924×250 = 657,250 – 192,500 – 231,000 | +233,750 |
+| SVM (Basic) | 6616 | 714 | 1335 | 2218 | 2218×250 – 714×500 – 1335×250 = 554,500 – 357,000 – 333,750 | –136,250 |
+| SVM (Enhanced) | 6799 | 531 | 1435 | 2118 | 2118×250 – 531×500 – 1435×250 = 529,500 – 265,500 – 358,750 | –94,750 |
+| Random Forest (Base) | 7112 | 218 | 1029 | 2524 | 2524×250 – 218×500 – 1029×250 = 631,000 – 109,000 – 257,250 | +264,750 |
 
-Even this simple logistic regression adds meaningful value by
-identifying likely cancellations and allowing profitable overbooking.  
-Future models with higher recall could further reduce lost revenue and
-increase profitability.
+### Profit Comparison Table — Stacked Models
+
+Scaled because the stacked test set is 30% of the original test set.
+
+| Model | TN | FP | FN | TP | Profit Calculation | Raw Profit | Scaled Profit |
+|----|----|----|----|----|----|----|----|
+| Stacked DT (No Cost) | 2055 | 141 | 202 | 867 | 867×250 – 141×500 – 202×250 = 216,750 – 70,500 – 50,500 | +95,750 | +318,333 |
+| Stacked DT (Cost Matrix) | 2104 | 92 | 276 | 793 | 793×250 – 92×500 – 276×250 = 198,250 – 46,000 – 69,000 | +83,250 | +277,500 |
+| Stacked RF (No Cost) | 2121 | 75 | 290 | 779 | 779×250 – 75×500 – 290×250 = 194,750 – 37,500 – 72,500 | +84,750 | +282,500 |
+| Stacked RF (Cost Weighted) | 2057 | 139 | 204 | 865 | 865×250 – 139×500 – 204×250 = 216,250 – 69,500 – 51,000 | +95,750 | +318,333 |
+
+### Final Recommendation:
+
+Our final recommendation is the Cost-Weighted Stacked Random Forest.
+While the no-cost stacked decision tree performed similarly, the
+weighted Random Forest is more stable, incorporates our financial costs
+directly into training, and better avoids the expensive false positives,
+making it the more reliable model for real hotel operations.
+
+### How Much Is the Model Worth?
+
+- **Baseline (Doing Nothing):**  
+  3,553 × (–\$250) = **–\$888,250**
+
+- **Best Model Profit:**  
+  **+\$318,333**
+
+- **Model Value:**  
+  \$318,333 – (–\$888,250) = **\$1,206,583**
+
+**The model is worth approximately \$1.21 million.**
