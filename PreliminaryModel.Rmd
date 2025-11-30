@@ -217,6 +217,7 @@ m_decision <- C5.0(
 
 plot(m_decision)
 ```
+
 The decision tree relies most heavily on a few key predictors. **Lead time** is by far the strongest driver of cancellation behavior, appearing in virtually every major split. The model also heavily uses **number of special requests**, **repeated guest status**, and **number of week nights** to differentiate likely cancellations from reliable bookings. Additionally, **price-related features** (such as `avg_price_per_room`) and **market segment type** help the tree distinguish different types of guests. Overall, the tree prioritizes guest commitment indicators (lead time, repeat status), stay characteristics (week nights, weekend nights), and booking channel/price information to identify cancellation risk.
 
 ### Step 4.5: Build SVM
@@ -275,7 +276,15 @@ rf_model <- randomForest(
 plot(rf_model)
 varImpPlot(rf_model)
 ```
-**Note about what the RF finds important**
+
+The first plot shows the **error rate** as the forest grows. The **overall error** (black line) reflects the model’s total misclassification rate across both classes. The **class 0 error** (green) is the error rate specifically for non-cancellations, while the **class 1 error** (red) is the error rate for cancellations. The curves stabilize early, showing that the model converges well before 500 trees. Notably, class 1 error is lower than class 0 error, meaning the model is better at identifying **cancellations** than **non-cancellations**, which is common when the signal for cancellations is stronger.
+
+The second figure shows the model’s **variable importance** using two metrics.  
+- **MeanDecreaseAccuracy** measures how much predictive accuracy drops when each variable is permuted. Large drops indicate variables the model truly relies on.  
+- **MeanDecreaseGini** measures how much a variable reduces impurity across all tree splits. This shows its structural importance within the forest.
+
+Across both measures, the most influential features are **lead_time**, **average price per room**, and **number of special requests**, followed by several timing-related variables such as **arrival_month**, **arrival_date**, and **number of weekend nights**. Together, these results highlight that **booking timing, price sensitivity, and guest behavior signals** are the strongest predictors of cancellation risk in the dataset.
+
 
 ## Step 5: Predict
 In our financial assumptions, a **false positive**—predicting a cancellation when the guest actually arrives—incurs a **\$500 walking cost**, which is **twice as expensive** as a false negative, where failing to predict a cancellation results in only **\$250 of lost revenue**. Because the cost of being wrong on a “cancel” prediction is substantially higher, we want to be **more conservative** when predicting cancellations. Therefore, using the default threshold of 0.5 would lead to too many false positives and unnecessary walking costs. To mitigate this, we adopt a **higher decision threshold** (0.70), ensuring we only predict a cancellation when the model is sufficiently confident. This approach minimizes expensive false positives while still capturing most true cancellations.

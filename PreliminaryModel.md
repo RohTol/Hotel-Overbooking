@@ -937,6 +937,7 @@ plot(m_decision)
 ```
 
 ![](PreliminaryModel_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
+
 The decision tree relies most heavily on a few key predictors. **Lead
 time** is by far the strongest driver of cancellation behavior,
 appearing in virtually every major split. The model also heavily uses
@@ -1027,7 +1028,33 @@ varImpPlot(rf_model)
 ```
 
 ![](PreliminaryModel_files/figure-gfm/unnamed-chunk-14-2.png)<!-- -->
-**Note about what the RF finds important**
+
+The first plot shows the **error rate** as the forest grows. The
+**overall error** (black line) reflects the model’s total
+misclassification rate across both classes. The **class 0 error**
+(green) is the error rate specifically for non-cancellations, while the
+**class 1 error** (red) is the error rate for cancellations. The curves
+stabilize early, showing that the model converges well before 500 trees.
+Notably, class 1 error is lower than class 0 error, meaning the model is
+better at identifying **cancellations** than **non-cancellations**,
+which is common when the signal for cancellations is stronger.
+
+The second figure shows the model’s **variable importance** using two
+metrics.  
+- **MeanDecreaseAccuracy** measures how much predictive accuracy drops
+when each variable is permuted. Large drops indicate variables the model
+truly relies on.  
+- **MeanDecreaseGini** measures how much a variable reduces impurity
+across all tree splits. This shows its structural importance within the
+forest.
+
+Across both measures, the most influential features are **lead_time**,
+**average price per room**, and **number of special requests**, followed
+by several timing-related variables such as **arrival_month**,
+**arrival_date**, and **number of weekend nights**. Together, these
+results highlight that **booking timing, price sensitivity, and guest
+behavior signals** are the strongest predictors of cancellation risk in
+the dataset.
 
 ## Step 5: Predict
 
@@ -1231,6 +1258,8 @@ detects fewer than half of all true cancellations. In contrast, its
 **specificity is very high at 95.6%**, indicating that it is excellent
 at correctly identifying guests who will *not* cancel.
 
+**Business Case Usefullness: Low**
+
 Enhanced LogReg
 
 ``` r
@@ -1265,8 +1294,15 @@ confusionMatrix(as.factor(pred_logreg_enh), as.factor(hotel_test$booking_status)
     ##        'Positive' Class : 1               
     ## 
 
-Very similar, but we will choose enhanced. Better Accuracy, sensitivity,
-specificity, kappa, balanced accuracy.
+The enhanced logistic regression improves slightly across all metrics,
+with better **sensitivity (43%)** and **balanced accuracy (69.6%).**
+However, it still misses the majority of true cancellations, limiting
+its usefulness for overbooking optimization. Although it reduces
+financial risk relative to the basic model, its predictive power is
+still not strong enough to reliably inform high-stakes overbooking
+decisions.
+
+**Business Case Usefulness: Low–Moderate**
 
 ### Step 6.2: Evaluate KNN Model
 
@@ -1302,6 +1338,16 @@ confusionMatrix(as.factor(knn_binary_final), as.factor(test_labels), positive = 
     ##        'Positive' Class : 1               
     ## 
 
+The KNN model shows a meaningful improvement with **accuracy at 81.9%**
+and **balanced accuracy at 74.3%.** **Sensitivity rises to 52%**, which
+means it detects over half of cancellations—a notable improvement over
+logistic regression. **Specificity remains high (96%)**, which helps
+avoid costly false positives. While KNN is not the strongest model
+available, it delivers moderate predictive capability and could be
+applied cautiously to guide overbooking under conservative thresholds.
+
+**Business Case Usefulness: Moderate**
+
 ### Step 6.3: Evaluate ANN Model
 
 ``` r
@@ -1336,6 +1382,15 @@ confusionMatrix(as.factor(pred_ann), as.factor(hotel_test_scaled$booking_status)
     ##        'Positive' Class : 1               
     ## 
 
+The ANN achieves strong balance between **sensitivity (60%) and
+specificity (91%).** This sensitivity level is significantly better than
+linear models, meaning the ANN captures more cancellations and provides
+more actionable predictions for revenue optimization. The slightly lower
+specificity does **increase risk of false overbookings**, but the
+overall **balanced accuracy (75.4%)** suggests a reliable signal.
+
+**Business Case Usefulness: Moderate–High**
+
 ### Step 6.4: Evaluate Decision Tree
 
 ``` r
@@ -1369,6 +1424,16 @@ confusionMatrix(as.factor(pred_dt), as.factor(hotel_test$booking_status), positi
     ##                                           
     ##        'Positive' Class : 1               
     ## 
+
+The decision tree delivers strong performance across key metrics: **high
+sensitivity (74%), high specificity (95%), and leading balanced accuracy
+(84.4%).** This combination makes it effective at identifying both
+cancellations and non-cancellations. It minimizes both lost revenue and
+overbooking penalties, making it a very strong candidate for operational
+use. Its interpretability also helps hotel managers understand risk
+factors.
+
+**Business Case Usefulness: High**
 
 ### Step 6.5: Evaluate SVM
 
@@ -1406,6 +1471,14 @@ confusionMatrix(as.factor(pred_svm_basic), as.factor(hotel_test_scaled$booking_s
     ##        'Positive' Class : 1              
     ## 
 
+The basic SVM model achieves solid **sensitivity (62%) and balanced
+accuracy (76.3%)**, outperforming logistic regression and KNN. This
+means it captures a larger share of cancellations while maintaining good
+specificity. The model presents a good compromise between detecting
+cancellation risk and avoiding false positives.
+
+**Business Case Usefulness: Moderate–High**
+
 Enhanced SVM
 
 ``` r
@@ -1440,7 +1513,14 @@ confusionMatrix(as.factor(pred_svm_enhanced), as.factor(hotel_test_scaled$bookin
     ##        'Positive' Class : 1              
     ## 
 
-Enhanced better. better accuracy, kappa, specificity.
+The enhanced SVM model shows slightly higher overall **accuracy
+(81.9%)** and maintains a strong balance between **sensitivity (60%) and
+specificity (93%).** While its sensitivity is slightly lower than the
+basic SVM, the improvement in specificity helps reduce costly false
+overbookings. Overall, it remains a robust and reliable model for
+supporting overbooking policies and is the better option than basic SVM.
+
+**Business Case Usefulness: Moderate–High**
 
 ### Step 6.6: Evaluate Random Forest
 
@@ -1476,6 +1556,16 @@ confusionMatrix(as.factor(pred_rf), as.factor(hotel_test$booking_status), positi
     ##        'Positive' Class : 1               
     ## 
 
+The random forest is one of the strongest models in the portfolio, with
+excellent **accuracy (88.5%), high sensitivity (71%), very high
+specificity (97%), and strong balanced accuracy (84%).** This model
+effectively identifies cancellations while avoiding false alarms, giving
+hotels a powerful tool for making profitable overbooking decisions. Its
+strong predictive signal and superior error balance make it the
+best-performing model for the business use case.
+
+**Business Case Usefulness: High**
+
 ### Summary Table
 
 | Model | Accuracy | Kappa | Sensitivity | Specificity | Balanced Accuracy |
@@ -1489,9 +1579,14 @@ confusionMatrix(as.factor(pred_rf), as.factor(hotel_test$booking_status), positi
 | SVM (Enhanced) | 0.8194 | 0.5604 | 0.5961 | 0.9276 | 0.7618 |
 | Random Forest | **0.8854** | **0.7232** | 0.7104 | **0.9703** | 0.8403 |
 
-RF and DT stand out from the rest.
+Overall, the **Random Forest model is the best option** so far for
+hotels to identify cancellations and make profitable overbooking
+decisions. Alternatively, the Decision Tree model is also effective and
+may be incorporated into hotel operations.
 
 ## Step 7: Build Second Level Model Dataset
+
+Now, we will build second level models by using the first level models.
 
 ``` r
 stacked_data <- data.frame(
@@ -1544,6 +1639,10 @@ model_stack_nocost <- C5.0(
 ```
 
 ### Step 9.2: Build Decision Tree with Cost Matrix
+
+For our business case, we will have the cost matrix represent the
+accounting cost of overbooking. Meaning, false negatives are 2x as
+costly to the business as a false positive.
 
 ``` r
 cost_matrix <- matrix(c(0, 500, 250, 0), nrow = 2)
@@ -1632,6 +1731,18 @@ confusionMatrix(
     ##        'Positive' Class : 1               
     ## 
 
+This stacked decision tree without the cost matrix performs extremely
+well across all metrics, achieving one of the **highest balanced
+accuracies (87.3%)** of all first and second level models and a very
+strong **sensitivity (81%).** This means it correctly identifies the
+majority of cancellations while still maintaining strong **specificity
+(93.6%)**, minimizing false overbookings. The model offers a strong
+trade-off between detecting high-risk bookings and avoiding unnecessary
+penalties. Overall, this is a high-performing model and an excellent fit
+for optimizing overbooking decisions with strong predictive stability.
+
+**Business Case Usefulness: High**
+
 ### Step 10.2: Predict/Evaluate Decision Tree with Cost Matrix
 
 ``` r
@@ -1671,6 +1782,19 @@ confusionMatrix(
     ##                                           
     ##        'Positive' Class : 1               
     ## 
+
+When a cost matrix is applied to the DT model, **sensitivity decreases
+to 74%,** but specificity increases to an exceptional 95.8%. This
+version of the model is more conservative: it avoids false positives
+(which are the most financially costly at –\$500 each) but at the
+expense of missing some cancellations. **Balanced accuracy (85%)**
+remains very strong, and the model aligns well with minimizing
+overbooking penalties. While slightly less aggressive in detecting
+cancellations, it is still a reliable option for real-world operations,
+especially if hotel management prioritizes avoiding walking a guest over
+profiting off of overbooking.
+
+**Business Case Usefulness: Moderate–High**
 
 ### Step 10.3: Predict/Evaluate Random Forest without Costs
 
@@ -1715,6 +1839,17 @@ confusionMatrix(
     ##        'Positive' Class : 1               
     ## 
 
+The stacked random forest without the cost matrix has high **specificity
+(96.6%),** the best among first and second level models, meaning it is
+ideal for minimizing overbooking penalties. **Sensitivity (72.9%) and
+balanced accuracy (84.7%)** remain strong, providing a reliable signal
+for identifying cancellations. Similarly to the previous mode, this
+model is well-suited for hotels that prefer a more conservative
+overbooking strategy, accepting a slightly higher risk of missed
+cancellations in exchange for fewer false positives.
+
+**Business Case Usefulness: Moderate–High**
+
 ### Step 10.4: Predict/Evaluate Random Forest with Costs
 
 Since costs are already incorporated, we threshold at 0.5.
@@ -1758,6 +1893,18 @@ confusionMatrix(
     ##        'Positive' Class : 1               
     ## 
 
+The stacked random forest with a cost matrix is one of the top
+performers overall. With outstanding **sensitivity (81%) and strong
+specificity (93.7%),** this model maintains excellent balance while
+directly incorporating business costs into training. It achieves the
+highest accuracy in the group (89.5%) and one of the highest **balanced
+accuracies (87.3%).** Because it both captures a large share of
+cancellations and avoids most costly false positives, it delivers one of
+the most financially optimized outcomes for hotels who want profit off
+of overooking but are also concerned about the cost of walking a guest.
+
+**Business Case Usefulness: High**
+
 ### Summary Table (Including Stacked Models)
 
 | Model | Accuracy | Kappa | Sensitivity | Specificity | Balanced Accuracy |
@@ -1775,7 +1922,14 @@ confusionMatrix(
 | Stacked RF (No Cost, thr = 0.7) | 0.8882 | 0.7324 | 0.7287 | **0.9658** | 0.8473 |
 | Stacked RF (Cost Weighted) | \*\*0.8949\* | 0.7577 | 0.8092 | 0.9367 | 0.8729 |
 
+Overall, **the stacked random forest with the cost matrix is the best
+model** for hotel operational use.
+
 ## Step 11: Profit
+
+Based on performance, we have determined that the stacked random forest
+with the cost matrix is most optimal. Next, we will confirm this by
+checking how each model affects hotels’ financial performances.
 
 ### Confusion Matrix
 
@@ -1791,7 +1945,7 @@ Profit Formula: 250 \* TP - 250 \* FN - 500 \* FP
 ### Baseline Comparison (Before Model)
 
 If the hotel does **no overbooking**, every canceled booking represents
-a loss of \$300.  
+a loss of \$250.  
 There were **3,553 total cancellations (TP + FN)**, resulting in  
 **Baseline Profit = 3,553 × (–\$250) = –\$888,250**
 
