@@ -1629,14 +1629,17 @@ stack_test  <- stacked_data[-trainrows, ]
 
 ## Step 9: Build Second Level Models
 
-### Step 9.1: Build Decision Tree with Cost Matrix
+### Step 9.1: Build Decision Tree without Cost Matrix
 
 ``` r
 model_stack_nocost <- C5.0(
   x = stack_train[, -which(colnames(stack_train) == "booking_status")],
   y = as.factor(stack_train$booking_status)
 )
+plot(model_stack_nocost)
 ```
+
+![](PreliminaryModel_files/figure-gfm/unnamed-chunk-33-1.png)<!-- -->
 
 ### Step 9.2: Build Decision Tree with Cost Matrix
 
@@ -1666,6 +1669,12 @@ model_stack_cost <- C5.0(
     ## Warning: no dimnames were given for the cost matrix; the factor levels will be
     ## used
 
+``` r
+plot(model_stack_cost)
+```
+
+![](PreliminaryModel_files/figure-gfm/unnamed-chunk-35-1.png)<!-- -->
+
 ### Step 9.3: Build Random Forest without Class Weights
 
 ``` r
@@ -1675,7 +1684,10 @@ rf_stack_nocost <- randomForest(
   ntree = 500,
   mtry = sqrt(ncol(stack_train) - 1)
 )
+varImpPlot(rf_stack_nocost, main = "Variable Importance — Stacked RF (No Cost)")
 ```
+
+![](PreliminaryModel_files/figure-gfm/unnamed-chunk-36-1.png)<!-- -->
 
 ### Step 9.4: Build Random Forest with Class Weights
 
@@ -1687,11 +1699,29 @@ rf_stack <- randomForest(
   mtry = sqrt(ncol(stack_train) - 1),
   classwt = c("0" = 500, "1" = 250)
 )
+varImpPlot(rf_stack, main = "Variable Importance — Stacked RF (Cost Weighted)")
 ```
 
-## Step 10: Predict and Evaluate
+![](PreliminaryModel_files/figure-gfm/unnamed-chunk-37-1.png)<!-- -->
 
-### Step 10.1: Predict/Evaluate Decision Tree without Cost Matrix
+### Analysis
+
+Across all four stacked models—both decision trees and both random
+forests—the ensembles consistently rely most heavily on the base
+Decision Tree and base Random Forest predictions when making their final
+classification. The first splits in both stacked decision trees are
+dominated by these two models, and the variable-importance plots for
+both versions of the stacked random forest show the same pattern:
+random_forest and decision_tree carry the strongest signal by a wide
+margin, with KNN, logistic regression, SVM, and ANN contributing far
+less.
+
+This consistency reinforces our earlier findings that the Decision Tree
+and Random Forest were the strongest individual learners, and it shows
+that the stacked models naturally learned to trust them most (even when
+cost weighting was applied) highlighting the robustness of the two base
+models. \## Step 10: Predict and Evaluate \### Step 10.1:
+Predict/Evaluate Decision Tree without Cost Matrix
 
 ``` r
 dt_no_cost_prob <- predict(model_stack_nocost, stack_test, type = "prob")[, "1"]
@@ -1942,6 +1972,25 @@ checking how each model affects hotels’ financial performances.
 
 Profit Formula: 250 \* TP - 250 \* FN - 500 \* FP
 
+### Assumptions Behind the Financial Model
+
+To keep the analysis consistent and interpretable, we base our financial
+calculations on the following assumptions:
+
+- A walked guest always costs the hotel **\$500**, and a canceled
+  booking always loses **\$250** unless resold.
+- The hotel can reliably resell rooms predicted as cancellations (i.e.,
+  demand is sufficiently high).
+- All reservations are treated as independent (no group bookings or
+  corporate contracts).
+- Customer mix, pricing, and seasonality remain similar to the
+  historical data.
+- The financial cost of guest dissatisfaction is already incorporated
+  into the \$500 walk penalty.
+
+These assumptions reflect typical hotel operations but should be
+reviewed and adjusted when deploying the model in practice.
+
 ### Baseline Comparison (Before Model)
 
 If the hotel does **no overbooking**, every canceled booking represents
@@ -1993,3 +2042,19 @@ making it the more reliable model for real hotel operations.
   \$318,333 – (–\$888,250) = **\$1,206,583**
 
 **The model is worth approximately \$1.21 million.**
+
+### Operational Interpretation (What This Means for a Real Hotel)
+
+From an operational standpoint, the model can be embedded directly into
+a hotel’s reservation or revenue-management system to update overbooking
+levels in real time. By sharply reducing **false positives** (the most
+expensive error type), the model minimizes the risk of walking guests
+while still recovering revenue from likely cancellations. Even moderate
+improvements in predictive accuracy translate into over **\$1.2 million
+in annualized value** in our dataset, making this an extremely impactful
+decision-support tool for high-volume hotels. Though, we must keep in
+mind that the model relies on historical cancellation behavior, which
+may shift due to seasonality, economic factors, or changes in booking
+policies. Additionally, rebooking revenue and walk costs are
+hotel-specific and may differ from the fixed values assumed here,
+meaning periodic retraining and threshold tuning will be necessary.
