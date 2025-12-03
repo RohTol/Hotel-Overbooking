@@ -11,6 +11,26 @@ Predicts hotel booking cancellations and potential no-shows. The
 business use case focuses on **optimizing overbooking decisions** to
 maximize hotel occupancy and revenue.
 
+### Scenario: Meet Ron, the Hotel Manager
+
+Ron is the general manager of a mid-sized city hotel that operates near
+full capacity during most of the year. Recently, Ron has been facing a
+major operational headache: **cancellations and overbookings are
+wrecking his occupancy numbers**. Some nights he ends up with 20 empty
+rooms because too many guests canceled at the last minute. Other nights,
+he slightly overbooks to compensate—but the wrong guests show up,
+forcing him to **walk** customers to nearby hotels, costing him money
+and damaging his reputation.
+
+Ron’s front desk staff is frustrated, customer complaints are rising,
+and corporate has asked him to “tighten up” revenue performance. What
+Ron needs is a **predictive system**—something that can tell him,
+*“Which bookings are most likely to cancel?”* so he can safely overbook
+when appropriate, avoid walking guests, and recover revenue that would
+otherwise be lost.
+
+This is the exact business problem our project solves.
+
 ### Context (from Kaggle)
 
 > “The online hotel reservation channels have dramatically changed
@@ -295,22 +315,35 @@ summary(hotel)
 ## Step 3: Split Data
 
 We have 36000 data entries. In order to build a second level model, we
-are going to keep 30% for evaluation. Let’s dummify and split the data.
+are going to keep 50% for evaluation. Let’s dummify, scale, and split
+the data.
 
 ``` r
 hotel_dummies <- as.data.frame(model.matrix(~ . - booking_status - 1, data = hotel))
 hotel_dummies$booking_status <- hotel$booking_status
 
-trainprop <- 0.7
+trainprop <- 0.5
 set.seed(12345)
 trainrows <- sample(1:nrow(hotel_dummies), trainprop * nrow(hotel_dummies))
 
+minmax <- function(x) {
+  if (is.numeric(x)) {
+    return((x - min(x)) / (max(x) - min(x)))
+  } else {
+    return(x)
+  }
+}
+hotel_scaled <- as.data.frame(lapply(hotel_dummies, minmax))
+
 hotel_train <- hotel_dummies[trainrows, ]
 hotel_test  <- hotel_dummies[-trainrows, ]
+
+hotel_train_scaled <- hotel_scaled[trainrows, ]
+hotel_test_scaled <- hotel_scaled[-trainrows, ]
 str(hotel_train)
 ```
 
-    ## 'data.frame':    25392 obs. of  29 variables:
+    ## 'data.frame':    18137 obs. of  29 variables:
     ##  $ no_of_adults                        : num  2 2 2 2 2 1 3 1 1 2 ...
     ##  $ no_of_children                      : num  0 0 0 0 0 0 0 0 0 0 ...
     ##  $ no_of_weekend_nights                : num  2 2 1 2 1 0 1 0 1 0 ...
@@ -340,227 +373,6 @@ str(hotel_train)
     ##  $ avg_price_per_room                  : num  90.1 87.1 149.4 75 90 ...
     ##  $ no_of_special_requests              : num  1 1 1 0 0 0 1 0 0 0 ...
     ##  $ booking_status                      : num  0 0 0 0 1 0 1 0 0 0 ...
-
-``` r
-summary(hotel_train)
-```
-
-    ##   no_of_adults   no_of_children    no_of_weekend_nights no_of_week_nights
-    ##  Min.   :0.000   Min.   : 0.0000   Min.   :0.000        Min.   : 0.000   
-    ##  1st Qu.:2.000   1st Qu.: 0.0000   1st Qu.:0.000        1st Qu.: 1.000   
-    ##  Median :2.000   Median : 0.0000   Median :1.000        Median : 2.000   
-    ##  Mean   :1.846   Mean   : 0.1069   Mean   :0.809        Mean   : 2.199   
-    ##  3rd Qu.:2.000   3rd Qu.: 0.0000   3rd Qu.:2.000        3rd Qu.: 3.000   
-    ##  Max.   :4.000   Max.   :10.0000   Max.   :6.000        Max.   :17.000   
-    ##  type_of_meal_planMeal Plan 1 type_of_meal_planMeal Plan 2
-    ##  Min.   :0.0000               Min.   :0.00000             
-    ##  1st Qu.:1.0000               1st Qu.:0.00000             
-    ##  Median :1.0000               Median :0.00000             
-    ##  Mean   :0.7668               Mean   :0.09156             
-    ##  3rd Qu.:1.0000               3rd Qu.:0.00000             
-    ##  Max.   :1.0000               Max.   :1.00000             
-    ##  type_of_meal_planMeal Plan 3 type_of_meal_planNot Selected
-    ##  Min.   :0.0000000            Min.   :0.0000               
-    ##  1st Qu.:0.0000000            1st Qu.:0.0000               
-    ##  Median :0.0000000            Median :0.0000               
-    ##  Mean   :0.0001575            Mean   :0.1415               
-    ##  3rd Qu.:0.0000000            3rd Qu.:0.0000               
-    ##  Max.   :1.0000000            Max.   :1.0000               
-    ##  required_car_parking_space room_type_reservedRoom_Type 2
-    ##  Min.   :0.00000            Min.   :0.00000              
-    ##  1st Qu.:0.00000            1st Qu.:0.00000              
-    ##  Median :0.00000            Median :0.00000              
-    ##  Mean   :0.03151            Mean   :0.01902              
-    ##  3rd Qu.:0.00000            3rd Qu.:0.00000              
-    ##  Max.   :1.00000            Max.   :1.00000              
-    ##  room_type_reservedRoom_Type 3 room_type_reservedRoom_Type 4
-    ##  Min.   :0.0000000             Min.   :0.0000               
-    ##  1st Qu.:0.0000000             1st Qu.:0.0000               
-    ##  Median :0.0000000             Median :0.0000               
-    ##  Mean   :0.0001969             Mean   :0.1658               
-    ##  3rd Qu.:0.0000000             3rd Qu.:0.0000               
-    ##  Max.   :1.0000000             Max.   :1.0000               
-    ##  room_type_reservedRoom_Type 5 room_type_reservedRoom_Type 6
-    ##  Min.   :0.000000              Min.   :0.00000              
-    ##  1st Qu.:0.000000              1st Qu.:0.00000              
-    ##  Median :0.000000              Median :0.00000              
-    ##  Mean   :0.007128              Mean   :0.02733              
-    ##  3rd Qu.:0.000000              3rd Qu.:0.00000              
-    ##  Max.   :1.000000              Max.   :1.00000              
-    ##  room_type_reservedRoom_Type 7   lead_time       arrival_year  arrival_month   
-    ##  Min.   :0.000000              Min.   :  0.00   Min.   :2017   Min.   : 1.000  
-    ##  1st Qu.:0.000000              1st Qu.: 16.00   1st Qu.:2018   1st Qu.: 5.000  
-    ##  Median :0.000000              Median : 57.00   Median :2018   Median : 8.000  
-    ##  Mean   :0.004411              Mean   : 84.68   Mean   :2018   Mean   : 7.417  
-    ##  3rd Qu.:0.000000              3rd Qu.:125.00   3rd Qu.:2018   3rd Qu.:10.000  
-    ##  Max.   :1.000000              Max.   :443.00   Max.   :2018   Max.   :12.000  
-    ##   arrival_date   market_segment_typeComplementary market_segment_typeCorporate
-    ##  Min.   : 1.00   Min.   :0.00000                  Min.   :0.00000             
-    ##  1st Qu.: 8.00   1st Qu.:0.00000                  1st Qu.:0.00000             
-    ##  Median :16.00   Median :0.00000                  Median :0.00000             
-    ##  Mean   :15.59   Mean   :0.01107                  Mean   :0.05577             
-    ##  3rd Qu.:23.00   3rd Qu.:0.00000                  3rd Qu.:0.00000             
-    ##  Max.   :31.00   Max.   :1.00000                  Max.   :1.00000             
-    ##  market_segment_typeOffline market_segment_typeOnline repeated_guest   
-    ##  Min.   :0.0000             Min.   :0.0000            Min.   :0.00000  
-    ##  1st Qu.:0.0000             1st Qu.:0.0000            1st Qu.:0.00000  
-    ##  Median :0.0000             Median :1.0000            Median :0.00000  
-    ##  Mean   :0.2896             Mean   :0.6402            Mean   :0.02603  
-    ##  3rd Qu.:1.0000             3rd Qu.:1.0000            3rd Qu.:0.00000  
-    ##  Max.   :1.0000             Max.   :1.0000            Max.   :1.00000  
-    ##  no_of_previous_cancellations no_of_previous_bookings_not_canceled
-    ##  Min.   : 0.0000              Min.   : 0.0000                     
-    ##  1st Qu.: 0.0000              1st Qu.: 0.0000                     
-    ##  Median : 0.0000              Median : 0.0000                     
-    ##  Mean   : 0.0256              Mean   : 0.1589                     
-    ##  3rd Qu.: 0.0000              3rd Qu.: 0.0000                     
-    ##  Max.   :13.0000              Max.   :58.0000                     
-    ##  avg_price_per_room no_of_special_requests booking_status  
-    ##  Min.   :  0.00     Min.   :0.0000         Min.   :0.0000  
-    ##  1st Qu.: 80.30     1st Qu.:0.0000         1st Qu.:0.0000  
-    ##  Median : 99.67     Median :0.0000         Median :0.0000  
-    ##  Mean   :103.59     Mean   :0.6204         Mean   :0.3281  
-    ##  3rd Qu.:120.60     3rd Qu.:1.0000         3rd Qu.:1.0000  
-    ##  Max.   :540.00     Max.   :5.0000         Max.   :1.0000
-
-Let’s now keep a normalized copy of the data for some of our models.
-
-``` r
-minmax <- function(x) {
-  if (is.numeric(x)) {
-    return((x - min(x)) / (max(x) - min(x)))
-  } else {
-    return(x)
-  }
-}
-
-hotel_train_scaled <- as.data.frame(lapply(hotel_train, minmax))
-hotel_test_scaled <- as.data.frame(lapply(hotel_test, minmax))
-hotel_train_scaled$booking_status <- as.factor(hotel_train$booking_status)
-hotel_test_scaled$booking_status  <- as.factor(hotel_test$booking_status)
-
-str(hotel_train_scaled)
-```
-
-    ## 'data.frame':    25392 obs. of  29 variables:
-    ##  $ no_of_adults                        : num  0.5 0.5 0.5 0.5 0.5 0.25 0.75 0.25 0.25 0.5 ...
-    ##  $ no_of_children                      : num  0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ no_of_weekend_nights                : num  0.333 0.333 0.167 0.333 0.167 ...
-    ##  $ no_of_week_nights                   : num  0.176 0.118 0 0.176 0.118 ...
-    ##  $ type_of_meal_planMeal.Plan.1        : num  1 0 1 1 1 1 1 1 1 1 ...
-    ##  $ type_of_meal_planMeal.Plan.2        : num  0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ type_of_meal_planMeal.Plan.3        : num  0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ type_of_meal_planNot.Selected       : num  0 1 0 0 0 0 0 0 0 0 ...
-    ##  $ required_car_parking_space          : num  0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ room_type_reservedRoom_Type.2       : num  0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ room_type_reservedRoom_Type.3       : num  0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ room_type_reservedRoom_Type.4       : num  0 0 1 1 0 0 1 1 0 0 ...
-    ##  $ room_type_reservedRoom_Type.5       : num  0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ room_type_reservedRoom_Type.6       : num  0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ room_type_reservedRoom_Type.7       : num  0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ lead_time                           : num  0.0271 0.3634 0.0677 0.0767 0.526 ...
-    ##  $ arrival_year                        : num  1 1 1 0 1 1 1 1 1 0 ...
-    ##  $ arrival_month                       : num  0.909 0.545 0.727 0.818 0.818 ...
-    ##  $ arrival_date                        : num  0.3 0.5 0.333 0.8 0.433 ...
-    ##  $ market_segment_typeComplementary    : num  0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ market_segment_typeCorporate        : num  0 0 0 0 0 1 0 0 0 0 ...
-    ##  $ market_segment_typeOffline          : num  0 0 0 1 1 0 0 1 1 1 ...
-    ##  $ market_segment_typeOnline           : num  1 1 1 0 0 0 1 0 0 0 ...
-    ##  $ repeated_guest                      : num  0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ no_of_previous_cancellations        : num  0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ no_of_previous_bookings_not_canceled: num  0 0 0 0 0 0 0 0 0 0 ...
-    ##  $ avg_price_per_room                  : num  0.167 0.161 0.277 0.139 0.167 ...
-    ##  $ no_of_special_requests              : num  0.2 0.2 0.2 0 0 0 0.2 0 0 0 ...
-    ##  $ booking_status                      : Factor w/ 2 levels "0","1": 1 1 1 1 2 1 2 1 1 1 ...
-
-``` r
-summary(hotel_train_scaled)
-```
-
-    ##   no_of_adults    no_of_children    no_of_weekend_nights no_of_week_nights
-    ##  Min.   :0.0000   Min.   :0.00000   Min.   :0.0000       Min.   :0.00000  
-    ##  1st Qu.:0.5000   1st Qu.:0.00000   1st Qu.:0.0000       1st Qu.:0.05882  
-    ##  Median :0.5000   Median :0.00000   Median :0.1667       Median :0.11765  
-    ##  Mean   :0.4615   Mean   :0.01069   Mean   :0.1348       Mean   :0.12936  
-    ##  3rd Qu.:0.5000   3rd Qu.:0.00000   3rd Qu.:0.3333       3rd Qu.:0.17647  
-    ##  Max.   :1.0000   Max.   :1.00000   Max.   :1.0000       Max.   :1.00000  
-    ##  type_of_meal_planMeal.Plan.1 type_of_meal_planMeal.Plan.2
-    ##  Min.   :0.0000               Min.   :0.00000             
-    ##  1st Qu.:1.0000               1st Qu.:0.00000             
-    ##  Median :1.0000               Median :0.00000             
-    ##  Mean   :0.7668               Mean   :0.09156             
-    ##  3rd Qu.:1.0000               3rd Qu.:0.00000             
-    ##  Max.   :1.0000               Max.   :1.00000             
-    ##  type_of_meal_planMeal.Plan.3 type_of_meal_planNot.Selected
-    ##  Min.   :0.0000000            Min.   :0.0000               
-    ##  1st Qu.:0.0000000            1st Qu.:0.0000               
-    ##  Median :0.0000000            Median :0.0000               
-    ##  Mean   :0.0001575            Mean   :0.1415               
-    ##  3rd Qu.:0.0000000            3rd Qu.:0.0000               
-    ##  Max.   :1.0000000            Max.   :1.0000               
-    ##  required_car_parking_space room_type_reservedRoom_Type.2
-    ##  Min.   :0.00000            Min.   :0.00000              
-    ##  1st Qu.:0.00000            1st Qu.:0.00000              
-    ##  Median :0.00000            Median :0.00000              
-    ##  Mean   :0.03151            Mean   :0.01902              
-    ##  3rd Qu.:0.00000            3rd Qu.:0.00000              
-    ##  Max.   :1.00000            Max.   :1.00000              
-    ##  room_type_reservedRoom_Type.3 room_type_reservedRoom_Type.4
-    ##  Min.   :0.0000000             Min.   :0.0000               
-    ##  1st Qu.:0.0000000             1st Qu.:0.0000               
-    ##  Median :0.0000000             Median :0.0000               
-    ##  Mean   :0.0001969             Mean   :0.1658               
-    ##  3rd Qu.:0.0000000             3rd Qu.:0.0000               
-    ##  Max.   :1.0000000             Max.   :1.0000               
-    ##  room_type_reservedRoom_Type.5 room_type_reservedRoom_Type.6
-    ##  Min.   :0.000000              Min.   :0.00000              
-    ##  1st Qu.:0.000000              1st Qu.:0.00000              
-    ##  Median :0.000000              Median :0.00000              
-    ##  Mean   :0.007128              Mean   :0.02733              
-    ##  3rd Qu.:0.000000              3rd Qu.:0.00000              
-    ##  Max.   :1.000000              Max.   :1.00000              
-    ##  room_type_reservedRoom_Type.7   lead_time        arrival_year   
-    ##  Min.   :0.000000              Min.   :0.00000   Min.   :0.0000  
-    ##  1st Qu.:0.000000              1st Qu.:0.03612   1st Qu.:1.0000  
-    ##  Median :0.000000              Median :0.12867   Median :1.0000  
-    ##  Mean   :0.004411              Mean   :0.19115   Mean   :0.8211  
-    ##  3rd Qu.:0.000000              3rd Qu.:0.28217   3rd Qu.:1.0000  
-    ##  Max.   :1.000000              Max.   :1.00000   Max.   :1.0000  
-    ##  arrival_month     arrival_date    market_segment_typeComplementary
-    ##  Min.   :0.0000   Min.   :0.0000   Min.   :0.00000                 
-    ##  1st Qu.:0.3636   1st Qu.:0.2333   1st Qu.:0.00000                 
-    ##  Median :0.6364   Median :0.5000   Median :0.00000                 
-    ##  Mean   :0.5834   Mean   :0.4863   Mean   :0.01107                 
-    ##  3rd Qu.:0.8182   3rd Qu.:0.7333   3rd Qu.:0.00000                 
-    ##  Max.   :1.0000   Max.   :1.0000   Max.   :1.00000                 
-    ##  market_segment_typeCorporate market_segment_typeOffline
-    ##  Min.   :0.00000              Min.   :0.0000            
-    ##  1st Qu.:0.00000              1st Qu.:0.0000            
-    ##  Median :0.00000              Median :0.0000            
-    ##  Mean   :0.05577              Mean   :0.2896            
-    ##  3rd Qu.:0.00000              3rd Qu.:1.0000            
-    ##  Max.   :1.00000              Max.   :1.0000            
-    ##  market_segment_typeOnline repeated_guest    no_of_previous_cancellations
-    ##  Min.   :0.0000            Min.   :0.00000   Min.   :0.000000            
-    ##  1st Qu.:0.0000            1st Qu.:0.00000   1st Qu.:0.000000            
-    ##  Median :1.0000            Median :0.00000   Median :0.000000            
-    ##  Mean   :0.6402            Mean   :0.02603   Mean   :0.001969            
-    ##  3rd Qu.:1.0000            3rd Qu.:0.00000   3rd Qu.:0.000000            
-    ##  Max.   :1.0000            Max.   :1.00000   Max.   :1.000000            
-    ##  no_of_previous_bookings_not_canceled avg_price_per_room no_of_special_requests
-    ##  Min.   :0.000000                     Min.   :0.0000     Min.   :0.0000        
-    ##  1st Qu.:0.000000                     1st Qu.:0.1487     1st Qu.:0.0000        
-    ##  Median :0.000000                     Median :0.1846     Median :0.0000        
-    ##  Mean   :0.002739                     Mean   :0.1918     Mean   :0.1241        
-    ##  3rd Qu.:0.000000                     3rd Qu.:0.2233     3rd Qu.:0.2000        
-    ##  Max.   :1.000000                     Max.   :1.0000     Max.   :1.0000        
-    ##  booking_status
-    ##  0:17060       
-    ##  1: 8332       
-    ##                
-    ##                
-    ##                
-    ## 
 
 ## Step 4: Build Models
 
@@ -622,10 +434,7 @@ often surge—and cancel more—during peak travel seasons or promotional
 periods. - Offline bookings (e.g., via agents) may follow entirely
 different seasonal trends.  
 By including these interactions, the model captures how **seasonality
-modifies cancellation behavior across different booking channels**. If
-you want, I can also generate a matching R code block (perfectly
-formatted) and a clean narrative paragraph describing the enhanced model
-for your deliverable.
+modifies cancellation behavior across different booking channels**.
 
 ``` r
 logreg_model_enhanced <- glm(
@@ -669,254 +478,80 @@ ann_model <- neuralnet(
   data = hotel_train_scaled,
   lifesign = "full",
   stepmax = 1e6,
-  hidden = 5
+  hidden = 2
 )
 ```
 
-    ## hidden: 5    thresh: 0.01    rep: 1/1    steps:    1000  min thresh: 7.58133521110547
-    ##                                                    2000  min thresh: 3.63381003379389
-    ##                                                    3000  min thresh: 3.22037873870527
-    ##                                                    4000  min thresh: 2.70204591179166
-    ##                                                    5000  min thresh: 2.34471107418459
-    ##                                                    6000  min thresh: 1.59969338255167
-    ##                                                    7000  min thresh: 1.55816133175567
-    ##                                                    8000  min thresh: 0.752995592994422
-    ##                                                    9000  min thresh: 0.752995592994422
-    ##                                                   10000  min thresh: 0.712888406407243
-    ##                                                   11000  min thresh: 0.559334758310086
-    ##                                                   12000  min thresh: 0.559334758310086
-    ##                                                   13000  min thresh: 0.559334758310086
-    ##                                                   14000  min thresh: 0.473221455344355
-    ##                                                   15000  min thresh: 0.473221455344355
-    ##                                                   16000  min thresh: 0.473221455344355
-    ##                                                   17000  min thresh: 0.473221455344355
-    ##                                                   18000  min thresh: 0.473221455344355
-    ##                                                   19000  min thresh: 0.4656983177695
-    ##                                                   20000  min thresh: 0.4656983177695
-    ##                                                   21000  min thresh: 0.4656983177695
-    ##                                                   22000  min thresh: 0.4656983177695
-    ##                                                   23000  min thresh: 0.4656983177695
-    ##                                                   24000  min thresh: 0.4656983177695
-    ##                                                   25000  min thresh: 0.4656983177695
-    ##                                                   26000  min thresh: 0.4656983177695
-    ##                                                   27000  min thresh: 0.4656983177695
-    ##                                                   28000  min thresh: 0.4656983177695
-    ##                                                   29000  min thresh: 0.4656983177695
-    ##                                                   30000  min thresh: 0.4656983177695
-    ##                                                   31000  min thresh: 0.4656983177695
-    ##                                                   32000  min thresh: 0.4656983177695
-    ##                                                   33000  min thresh: 0.4656983177695
-    ##                                                   34000  min thresh: 0.4656983177695
-    ##                                                   35000  min thresh: 0.4656983177695
-    ##                                                   36000  min thresh: 0.4656983177695
-    ##                                                   37000  min thresh: 0.4656983177695
-    ##                                                   38000  min thresh: 0.4656983177695
-    ##                                                   39000  min thresh: 0.4656983177695
-    ##                                                   40000  min thresh: 0.4656983177695
-    ##                                                   41000  min thresh: 0.4656983177695
-    ##                                                   42000  min thresh: 0.4656983177695
-    ##                                                   43000  min thresh: 0.4656983177695
-    ##                                                   44000  min thresh: 0.4656983177695
-    ##                                                   45000  min thresh: 0.4656983177695
-    ##                                                   46000  min thresh: 0.4656983177695
-    ##                                                   47000  min thresh: 0.4656983177695
-    ##                                                   48000  min thresh: 0.4656983177695
-    ##                                                   49000  min thresh: 0.4656983177695
-    ##                                                   50000  min thresh: 0.4656983177695
-    ##                                                   51000  min thresh: 0.4656983177695
-    ##                                                   52000  min thresh: 0.4656983177695
-    ##                                                   53000  min thresh: 0.4656983177695
-    ##                                                   54000  min thresh: 0.459362641744752
-    ##                                                   55000  min thresh: 0.370217652066894
-    ##                                                   56000  min thresh: 0.273722600067687
-    ##                                                   57000  min thresh: 0.273722600067687
-    ##                                                   58000  min thresh: 0.273722600067687
-    ##                                                   59000  min thresh: 0.273722600067687
-    ##                                                   60000  min thresh: 0.264181245720013
-    ##                                                   61000  min thresh: 0.241673947462509
-    ##                                                   62000  min thresh: 0.22427433050905
-    ##                                                   63000  min thresh: 0.22427433050905
-    ##                                                   64000  min thresh: 0.194166325704831
-    ##                                                   65000  min thresh: 0.194166325704831
-    ##                                                   66000  min thresh: 0.164744161473736
-    ##                                                   67000  min thresh: 0.164744161473736
-    ##                                                   68000  min thresh: 0.164744161473736
-    ##                                                   69000  min thresh: 0.164744161473736
-    ##                                                   70000  min thresh: 0.164744161473736
-    ##                                                   71000  min thresh: 0.164744161473736
-    ##                                                   72000  min thresh: 0.164744161473736
-    ##                                                   73000  min thresh: 0.164744161473736
-    ##                                                   74000  min thresh: 0.164744161473736
-    ##                                                   75000  min thresh: 0.164744161473736
-    ##                                                   76000  min thresh: 0.164744161473736
-    ##                                                   77000  min thresh: 0.164744161473736
-    ##                                                   78000  min thresh: 0.164744161473736
-    ##                                                   79000  min thresh: 0.164744161473736
-    ##                                                   80000  min thresh: 0.164744161473736
-    ##                                                   81000  min thresh: 0.164744161473736
-    ##                                                   82000  min thresh: 0.164744161473736
-    ##                                                   83000  min thresh: 0.164744161473736
-    ##                                                   84000  min thresh: 0.164744161473736
-    ##                                                   85000  min thresh: 0.145293551291532
-    ##                                                   86000  min thresh: 0.0927452670668016
-    ##                                                   87000  min thresh: 0.0927452670668016
-    ##                                                   88000  min thresh: 0.0927452670668016
-    ##                                                   89000  min thresh: 0.0927452670668016
-    ##                                                   90000  min thresh: 0.0927452670668016
-    ##                                                   91000  min thresh: 0.0892622136447611
-    ##                                                   92000  min thresh: 0.0892622136447611
-    ##                                                   93000  min thresh: 0.0892622136447611
-    ##                                                   94000  min thresh: 0.0892622136447611
-    ##                                                   95000  min thresh: 0.0892622136447611
-    ##                                                   96000  min thresh: 0.0610764204115359
-    ##                                                   97000  min thresh: 0.0610764204115359
-    ##                                                   98000  min thresh: 0.0610764204115359
-    ##                                                   99000  min thresh: 0.0610764204115359
-    ##                                                   1e+05  min thresh: 0.0610764204115359
-    ##                                                  101000  min thresh: 0.0610764204115359
-    ##                                                  102000  min thresh: 0.0610764204115359
-    ##                                                  103000  min thresh: 0.0493041754378548
-    ##                                                  104000  min thresh: 0.0473607360522904
-    ##                                                  105000  min thresh: 0.0473607360522904
-    ##                                                  106000  min thresh: 0.0473607360522904
-    ##                                                  107000  min thresh: 0.0407092534069381
-    ##                                                  108000  min thresh: 0.0407092534069381
-    ##                                                  109000  min thresh: 0.0407092534069381
-    ##                                                  110000  min thresh: 0.0407092534069381
-    ##                                                  111000  min thresh: 0.0407092534069381
-    ##                                                  112000  min thresh: 0.0407092534069381
-    ##                                                  113000  min thresh: 0.0407092534069381
-    ##                                                  114000  min thresh: 0.0407092534069381
-    ##                                                  115000  min thresh: 0.0407092534069381
-    ##                                                  116000  min thresh: 0.0407092534069381
-    ##                                                  117000  min thresh: 0.0407092534069381
-    ##                                                  118000  min thresh: 0.0407092534069381
-    ##                                                  119000  min thresh: 0.0407092534069381
-    ##                                                  120000  min thresh: 0.0407092534069381
-    ##                                                  121000  min thresh: 0.0311914937950078
-    ##                                                  122000  min thresh: 0.0311914937950078
-    ##                                                  123000  min thresh: 0.0311914937950078
-    ##                                                  124000  min thresh: 0.0311914937950078
-    ##                                                  125000  min thresh: 0.0311914937950078
-    ##                                                  126000  min thresh: 0.0311914937950078
-    ##                                                  127000  min thresh: 0.0270393621577827
-    ##                                                  128000  min thresh: 0.0270393621577827
-    ##                                                  129000  min thresh: 0.0237228455816251
-    ##                                                  130000  min thresh: 0.0237228455816251
-    ##                                                  131000  min thresh: 0.0237228455816251
-    ##                                                  132000  min thresh: 0.0237228455816251
-    ##                                                  133000  min thresh: 0.0237228455816251
-    ##                                                  134000  min thresh: 0.0237228455816251
-    ##                                                  135000  min thresh: 0.0175828220633897
-    ##                                                  136000  min thresh: 0.0175828220633897
-    ##                                                  137000  min thresh: 0.0175828220633897
-    ##                                                  138000  min thresh: 0.0175828220633897
-    ##                                                  139000  min thresh: 0.0175828220633897
-    ##                                                  140000  min thresh: 0.0175828220633897
-    ##                                                  141000  min thresh: 0.0175828220633897
-    ##                                                  142000  min thresh: 0.0175828220633897
-    ##                                                  143000  min thresh: 0.0175828220633897
-    ##                                                  144000  min thresh: 0.0175828220633897
-    ##                                                  145000  min thresh: 0.0175828220633897
-    ##                                                  146000  min thresh: 0.0175828220633897
-    ##                                                  147000  min thresh: 0.0153773572706105
-    ##                                                  148000  min thresh: 0.0153773572706105
-    ##                                                  149000  min thresh: 0.0153773572706105
-    ##                                                  150000  min thresh: 0.0153773572706105
-    ##                                                  151000  min thresh: 0.0153773572706105
-    ##                                                  152000  min thresh: 0.0153773572706105
-    ##                                                  153000  min thresh: 0.0153773572706105
-    ##                                                  154000  min thresh: 0.0153773572706105
-    ##                                                  155000  min thresh: 0.0153773572706105
-    ##                                                  156000  min thresh: 0.0153773572706105
-    ##                                                  157000  min thresh: 0.0153773572706105
-    ##                                                  158000  min thresh: 0.0153773572706105
-    ##                                                  159000  min thresh: 0.0153773572706105
-    ##                                                  160000  min thresh: 0.0153773572706105
-    ##                                                  161000  min thresh: 0.0153773572706105
-    ##                                                  162000  min thresh: 0.0153773572706105
-    ##                                                  163000  min thresh: 0.0153773572706105
-    ##                                                  164000  min thresh: 0.0153773572706105
-    ##                                                  165000  min thresh: 0.0153773572706105
-    ##                                                  166000  min thresh: 0.0153773572706105
-    ##                                                  167000  min thresh: 0.0153773572706105
-    ##                                                  168000  min thresh: 0.0153773572706105
-    ##                                                  169000  min thresh: 0.0153773572706105
-    ##                                                  170000  min thresh: 0.0153773572706105
-    ##                                                  171000  min thresh: 0.0153773572706105
-    ##                                                  172000  min thresh: 0.0153773572706105
-    ##                                                  173000  min thresh: 0.0153773572706105
-    ##                                                  174000  min thresh: 0.0153773572706105
-    ##                                                  175000  min thresh: 0.0153773572706105
-    ##                                                  176000  min thresh: 0.0153773572706105
-    ##                                                  177000  min thresh: 0.0153773572706105
-    ##                                                  178000  min thresh: 0.0153773572706105
-    ##                                                  179000  min thresh: 0.0153773572706105
-    ##                                                  180000  min thresh: 0.0153773572706105
-    ##                                                  181000  min thresh: 0.0153773572706105
-    ##                                                  182000  min thresh: 0.0153773572706105
-    ##                                                  183000  min thresh: 0.0153773572706105
-    ##                                                  184000  min thresh: 0.0139220867181143
-    ##                                                  185000  min thresh: 0.0139220867181143
-    ##                                                  186000  min thresh: 0.0139220867181143
-    ##                                                  187000  min thresh: 0.0139220867181143
-    ##                                                  188000  min thresh: 0.0139220867181143
-    ##                                                  189000  min thresh: 0.0139220867181143
-    ##                                                  190000  min thresh: 0.0139220867181143
-    ##                                                  191000  min thresh: 0.0139220867181143
-    ##                                                  192000  min thresh: 0.0139220867181143
-    ##                                                  193000  min thresh: 0.0139220867181143
-    ##                                                  194000  min thresh: 0.0139220867181143
-    ##                                                  195000  min thresh: 0.0139220867181143
-    ##                                                  196000  min thresh: 0.0139220867181143
-    ##                                                  197000  min thresh: 0.0139220867181143
-    ##                                                  198000  min thresh: 0.0139220867181143
-    ##                                                  199000  min thresh: 0.0139220867181143
-    ##                                                   2e+05  min thresh: 0.0139220867181143
-    ##                                                  201000  min thresh: 0.0139220867181143
-    ##                                                  202000  min thresh: 0.0139220867181143
-    ##                                                  203000  min thresh: 0.0139220867181143
-    ##                                                  204000  min thresh: 0.0139220867181143
-    ##                                                  205000  min thresh: 0.0139220867181143
-    ##                                                  206000  min thresh: 0.0139220867181143
-    ##                                                  207000  min thresh: 0.0139220867181143
-    ##                                                  208000  min thresh: 0.0139220867181143
-    ##                                                  209000  min thresh: 0.0139220867181143
-    ##                                                  210000  min thresh: 0.0139220867181143
-    ##                                                  211000  min thresh: 0.0139220867181143
-    ##                                                  212000  min thresh: 0.0139220867181143
-    ##                                                  213000  min thresh: 0.0139220867181143
-    ##                                                  214000  min thresh: 0.0139220867181143
-    ##                                                  215000  min thresh: 0.0139220867181143
-    ##                                                  216000  min thresh: 0.0139220867181143
-    ##                                                  217000  min thresh: 0.0139220867181143
-    ##                                                  218000  min thresh: 0.0139220867181143
-    ##                                                  219000  min thresh: 0.0117473311914375
-    ##                                                  220000  min thresh: 0.0117473311914375
-    ##                                                  221000  min thresh: 0.0117473311914375
-    ##                                                  222000  min thresh: 0.0117473311914375
-    ##                                                  223000  min thresh: 0.0117473311914375
-    ##                                                  224000  min thresh: 0.0117473311914375
-    ##                                                  225000  min thresh: 0.0102617094316709
-    ##                                                  226000  min thresh: 0.0102617094316709
-    ##                                                  227000  min thresh: 0.0102617094316709
-    ##                                                  228000  min thresh: 0.0102617094316709
-    ##                                                  229000  min thresh: 0.0102617094316709
-    ##                                                  230000  min thresh: 0.0102617094316709
-    ##                                                  231000  min thresh: 0.0102617094316709
-    ##                                                  232000  min thresh: 0.0102617094316709
-    ##                                                  233000  min thresh: 0.0102617094316709
-    ##                                                  234000  min thresh: 0.0102617094316709
-    ##                                                  235000  min thresh: 0.0102617094316709
-    ##                                                  236000  min thresh: 0.0102617094316709
-    ##                                                  237000  min thresh: 0.0102617094316709
-    ##                                                  238000  min thresh: 0.0102617094316709
-    ##                                                  239000  min thresh: 0.0102617094316709
-    ##                                                  240000  min thresh: 0.0102617094316709
-    ##                                                  241000  min thresh: 0.0102617094316709
-    ##                                                  242000  min thresh: 0.0102617094316709
-    ##                                                  243000  min thresh: 0.0102617094316709
-    ##                                                  243873  error: 1568.4898    time: 1.41 hours
+    ## hidden: 2    thresh: 0.01    rep: 1/1    steps:    1000  min thresh: 2.77619757106633
+    ##                                                    2000  min thresh: 1.24621973765806
+    ##                                                    3000  min thresh: 0.813334161499235
+    ##                                                    4000  min thresh: 0.453133568112846
+    ##                                                    5000  min thresh: 0.453133568112846
+    ##                                                    6000  min thresh: 0.453133568112846
+    ##                                                    7000  min thresh: 0.453133568112846
+    ##                                                    8000  min thresh: 0.453133568112846
+    ##                                                    9000  min thresh: 0.453133568112846
+    ##                                                   10000  min thresh: 0.453133568112846
+    ##                                                   11000  min thresh: 0.453133568112846
+    ##                                                   12000  min thresh: 0.453133568112846
+    ##                                                   13000  min thresh: 0.453133568112846
+    ##                                                   14000  min thresh: 0.453133568112846
+    ##                                                   15000  min thresh: 0.453133568112846
+    ##                                                   16000  min thresh: 0.453133568112846
+    ##                                                   17000  min thresh: 0.366369600688719
+    ##                                                   18000  min thresh: 0.189806090882579
+    ##                                                   19000  min thresh: 0.189806090882579
+    ##                                                   20000  min thresh: 0.145845211076629
+    ##                                                   21000  min thresh: 0.117723567222123
+    ##                                                   22000  min thresh: 0.0979128972402126
+    ##                                                   23000  min thresh: 0.0979128972402126
+    ##                                                   24000  min thresh: 0.0851758762127452
+    ##                                                   25000  min thresh: 0.0712565019999547
+    ##                                                   26000  min thresh: 0.0595544191077528
+    ##                                                   27000  min thresh: 0.0595544191077528
+    ##                                                   28000  min thresh: 0.0522258875362938
+    ##                                                   29000  min thresh: 0.0325645576693234
+    ##                                                   30000  min thresh: 0.0325645576693234
+    ##                                                   31000  min thresh: 0.0325645576693234
+    ##                                                   32000  min thresh: 0.0325645576693234
+    ##                                                   33000  min thresh: 0.0325645576693234
+    ##                                                   34000  min thresh: 0.0325645576693234
+    ##                                                   35000  min thresh: 0.0292125576968254
+    ##                                                   36000  min thresh: 0.0292125576968254
+    ##                                                   37000  min thresh: 0.0225684392587399
+    ##                                                   38000  min thresh: 0.0225684392587399
+    ##                                                   39000  min thresh: 0.0225684392587399
+    ##                                                   40000  min thresh: 0.0225684392587399
+    ##                                                   41000  min thresh: 0.0225684392587399
+    ##                                                   42000  min thresh: 0.0217580679210169
+    ##                                                   43000  min thresh: 0.0188461749518951
+    ##                                                   44000  min thresh: 0.0188461749518951
+    ##                                                   45000  min thresh: 0.0188461749518951
+    ##                                                   46000  min thresh: 0.0188461749518951
+    ##                                                   47000  min thresh: 0.0188461749518951
+    ##                                                   48000  min thresh: 0.0188461749518951
+    ##                                                   49000  min thresh: 0.0188461749518951
+    ##                                                   50000  min thresh: 0.0188461749518951
+    ##                                                   51000  min thresh: 0.017452353570895
+    ##                                                   52000  min thresh: 0.017452353570895
+    ##                                                   53000  min thresh: 0.017452353570895
+    ##                                                   54000  min thresh: 0.017452353570895
+    ##                                                   55000  min thresh: 0.017452353570895
+    ##                                                   56000  min thresh: 0.017452353570895
+    ##                                                   57000  min thresh: 0.017452353570895
+    ##                                                   58000  min thresh: 0.0155454114417829
+    ##                                                   59000  min thresh: 0.0144731067482335
+    ##                                                   60000  min thresh: 0.0144731067482335
+    ##                                                   61000  min thresh: 0.0144731067482335
+    ##                                                   62000  min thresh: 0.0140739959599545
+    ##                                                   63000  min thresh: 0.0131281079695655
+    ##                                                   64000  min thresh: 0.0131281079695655
+    ##                                                   65000  min thresh: 0.0131281079695655
+    ##                                                   66000  min thresh: 0.0129144605859179
+    ##                                                   67000  min thresh: 0.0129144605859179
+    ##                                                   68000  min thresh: 0.0129144605859179
+    ##                                                   69000  min thresh: 0.0126004143542452
+    ##                                                   69826  error: 1205.15052   time: 13.68 mins
 
 ``` r
 plot(ann_model)
@@ -936,7 +571,507 @@ m_decision <- C5.0(
 plot(m_decision)
 ```
 
-![](PreliminaryModel_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
+![](PreliminaryModel_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
+
+``` r
+summary(m_decision)
+```
+
+    ## 
+    ## Call:
+    ## C5.0.formula(formula = as.factor(booking_status) ~ ., data = hotel_train)
+    ## 
+    ## 
+    ## C5.0 [Release 2.07 GPL Edition]      Tue Dec  2 18:03:42 2025
+    ## -------------------------------
+    ## 
+    ## Class specified by attribute `outcome'
+    ## 
+    ## Read 18137 cases (29 attributes) from undefined.data
+    ## 
+    ## Decision tree:
+    ## 
+    ## lead_time > 151:
+    ## :...no_of_special_requests > 2: 0 (51)
+    ## :   no_of_special_requests <= 2:
+    ## :   :...avg_price_per_room > 100:
+    ## :       :...arrival_month <= 11: 1 (1487)
+    ## :       :   arrival_month > 11:
+    ## :       :   :...no_of_special_requests <= 0: 0 (42)
+    ## :       :       no_of_special_requests > 0:
+    ## :       :       :...arrival_date <= 24: 0 (5)
+    ## :       :           arrival_date > 24: 1 (13/4)
+    ## :       avg_price_per_room <= 100:
+    ## :       :...type_of_meal_planMeal Plan 2 > 0:
+    ## :           :...arrival_month <= 9: 0 (103/8)
+    ## :           :   arrival_month > 9:
+    ## :           :   :...no_of_week_nights <= 1: 0 (4/1)
+    ## :           :       no_of_week_nights > 1: 1 (12/1)
+    ## :           type_of_meal_planMeal Plan 2 <= 0:
+    ## :           :...no_of_special_requests > 0:
+    ## :               :...no_of_weekend_nights <= 0:
+    ## :               :   :...lead_time <= 180: 0 (45/5)
+    ## :               :   :   lead_time > 180:
+    ## :               :   :   :...market_segment_typeOffline > 0:
+    ## :               :   :       :...no_of_adults <= 2: 0 (11)
+    ## :               :   :       :   no_of_adults > 2: 1 (2)
+    ## :               :   :       market_segment_typeOffline <= 0:
+    ## :               :   :       :...arrival_month <= 11: 1 (78)
+    ## :               :   :           arrival_month > 11:
+    ## :               :   :           :...lead_time > 277: 1 (4)
+    ## :               :   :               lead_time <= 277:
+    ## :               :   :               :...lead_time <= 222: 1 (2)
+    ## :               :   :                   lead_time > 222: 0 (6)
+    ## :               :   no_of_weekend_nights > 0:
+    ## :               :   :...arrival_month > 11: 1 (39/18)
+    ## :               :       arrival_month <= 11:
+    ## :               :       :...type_of_meal_planMeal Plan 1 > 0: 0 (286/36)
+    ## :               :           type_of_meal_planMeal Plan 1 <= 0:
+    ## :               :           :...no_of_adults <= 1: 0 (4)
+    ## :               :               no_of_adults > 1:
+    ## :               :               :...avg_price_per_room > 93.56:
+    ## :               :                   :...lead_time <= 192: 1 (7)
+    ## :               :                   :   lead_time > 192: 0 (6/2)
+    ## :               :                   avg_price_per_room <= 93.56:
+    ## :               :                   :...no_of_special_requests <= 1:
+    ## :               :                       :...no_of_week_nights <= 0: 1 (2)
+    ## :               :                       :   no_of_week_nights > 0: 0 (31/3)
+    ## :               :                       no_of_special_requests > 1:
+    ## :               :                       :...no_of_weekend_nights <= 1: 0 (6)
+    ## :               :                           no_of_weekend_nights > 1:
+    ## :               :                           :...no_of_week_nights <= 4: 1 (5)
+    ## :               :                               no_of_week_nights > 4: 0 (2)
+    ## :               no_of_special_requests <= 0:
+    ## :               :...market_segment_typeOffline <= 0:
+    ## :                   :...no_of_adults > 1: 1 (395)
+    ## :                   :   no_of_adults <= 1:
+    ## :                   :   :...avg_price_per_room > 68: 1 (33/1)
+    ## :                   :       avg_price_per_room <= 68:
+    ## :                   :       :...no_of_adults <= 0: 1 (2)
+    ## :                   :           no_of_adults > 0: 0 (8/1)
+    ## :                   market_segment_typeOffline > 0:
+    ## :                   :...arrival_month > 11: 0 (56)
+    ## :                       arrival_month <= 11:
+    ## :                       :...no_of_adults <= 1:
+    ## :                           :...no_of_weekend_nights > 1:
+    ## :                           :   :...avg_price_per_room <= 89.14: 0 (9/1)
+    ## :                           :   :   avg_price_per_room > 89.14: 1 (14)
+    ## :                           :   no_of_weekend_nights <= 1:
+    ## :                           :   :...lead_time <= 335: 0 (156/10)
+    ## :                           :       lead_time > 335:
+    ## :                           :       :...lead_time <= 338: 0 (2)
+    ## :                           :           lead_time > 338: 1 (8/1)
+    ## :                           no_of_adults > 1:
+    ## :                           :...arrival_year <= 2017:
+    ## :                               :...lead_time > 198: 0 (59)
+    ## :                               :   lead_time <= 198:
+    ## :                               :   :...lead_time <= 168: 0 (5/1)
+    ## :                               :       lead_time > 168: 1 (25)
+    ## :                               arrival_year > 2017:
+    ## :                               :...lead_time <= 203:
+    ## :                                   :...avg_price_per_room <= 81.76: 0 (60/7)
+    ## :                                   :   avg_price_per_room > 81.76:
+    ## :                                   :   :...avg_price_per_room <= 90.45: 1 (27/2)
+    ## :                                   :       avg_price_per_room > 90.45:
+    ## :                                   :       :...arrival_date <= 5: 1 (8)
+    ## :                                   :           arrival_date > 5: 0 (10)
+    ## :                                   lead_time > 203:
+    ## :                                   :...no_of_weekend_nights > 1:
+    ## :                                       :...arrival_month > 8: 0 (10/1)
+    ## :                                       :   arrival_month <= 8:
+    ## :                                       :   :...no_of_week_nights > 4: 0 (2)
+    ## :                                       :       no_of_week_nights <= 4:
+    ## :                                       :       :...arrival_month <= 4: 0 (4/1)
+    ## :                                       :           arrival_month > 4: 1 (29/4)
+    ## :                                       no_of_weekend_nights <= 1:
+    ## :                                       :...no_of_week_nights > 3:
+    ## :                                           :...arrival_date <= 18: 1 (26)
+    ## :                                           :   arrival_date > 18: [S1]
+    ## :                                           no_of_week_nights <= 3:
+    ## :                                           :...arrival_month > 10: 1 (96)
+    ## :                                               arrival_month <= 10: [S2]
+    ## lead_time <= 151:
+    ## :...no_of_week_nights > 8:
+    ##     :...arrival_month <= 1: 0 (4)
+    ##     :   arrival_month > 1: 1 (49/4)
+    ##     no_of_week_nights <= 8:
+    ##     :...repeated_guest > 0: 0 (443/3)
+    ##         repeated_guest <= 0:
+    ##         :...required_car_parking_space > 0: 0 (433/5)
+    ##             required_car_parking_space <= 0:
+    ##             :...no_of_special_requests > 0:
+    ##                 :...no_of_special_requests > 1:
+    ##                 :   :...lead_time <= 90: 0 (1601/27)
+    ##                 :   :   lead_time > 90:
+    ##                 :   :   :...arrival_month > 10:
+    ##                 :   :       :...no_of_week_nights <= 0: 1 (7)
+    ##                 :   :       :   no_of_week_nights > 0: 0 (86/22)
+    ##                 :   :       arrival_month <= 10:
+    ##                 :   :       :...arrival_year > 2017: 0 (286/34)
+    ##                 :   :           arrival_year <= 2017:
+    ##                 :   :           :...arrival_month <= 7: 1 (6)
+    ##                 :   :               arrival_month > 7: 0 (12/2)
+    ##                 :   no_of_special_requests <= 1:
+    ##                 :   :...market_segment_typeOffline > 0: 0 (517/15)
+    ##                 :       market_segment_typeOffline <= 0:
+    ##                 :       :...lead_time <= 6: 0 (633/32)
+    ##                 :           lead_time > 6:
+    ##                 :           :...arrival_month > 11:
+    ##                 :               :...lead_time <= 93: 0 (242/1)
+    ##                 :               :   lead_time > 93: [S3]
+    ##                 :               arrival_month <= 11:
+    ##                 :               :...avg_price_per_room <= 118.27:
+    ##                 :                   :...avg_price_per_room <= 66.49: 0 (128/5)
+    ##                 :                   :   avg_price_per_room > 66.49:
+    ##                 :                   :   :...avg_price_per_room <= 80.2:
+    ##                 :                   :       :...arrival_year > 2017: 0 (291/66)
+    ##                 :                   :       :   arrival_year <= 2017:
+    ##                 :                   :       :   :...arrival_month > 7: 0 (58/18)
+    ##                 :                   :       :       arrival_month <= 7: [S4]
+    ##                 :                   :       avg_price_per_room > 80.2:
+    ##                 :                   :       :...lead_time <= 135: 0 (1325/205)
+    ##                 :                   :           lead_time > 135: [S5]
+    ##                 :                   avg_price_per_room > 118.27:
+    ##                 :                   :...arrival_year <= 2017: 0 (50/3)
+    ##                 :                       arrival_year > 2017:
+    ##                 :                       :...arrival_month <= 8:
+    ##                 :                           :...arrival_month > 3: 0 (574/119)
+    ##                 :                           :   arrival_month <= 3:
+    ##                 :                           :   :...lead_time <= 34: 0 (35/5)
+    ##                 :                           :       lead_time > 34: [S6]
+    ##                 :                           arrival_month > 8:
+    ##                 :                           :...no_of_week_nights > 3: 1 (57/23)
+    ##                 :                               no_of_week_nights <= 3: [S7]
+    ##                 no_of_special_requests <= 0:
+    ##                 :...market_segment_typeOnline > 0:
+    ##                     :...arrival_month <= 1: 0 (120/9)
+    ##                     :   arrival_month > 1:
+    ##                     :   :...lead_time <= 13:
+    ##                     :       :...arrival_month > 11: 0 (114)
+    ##                     :       :   arrival_month <= 11:
+    ##                     :       :   :...avg_price_per_room > 196.35:
+    ##                     :       :       :...avg_price_per_room <= 201.6: 0 (5/1)
+    ##                     :       :       :   avg_price_per_room > 201.6: 1 (21)
+    ##                     :       :       avg_price_per_room <= 196.35:
+    ##                     :       :       :...lead_time <= 3:
+    ##                     :       :           :...arrival_month > 5: 0 (257/19)
+    ##                     :       :           :   arrival_month <= 5:
+    ##                     :       :           :   :...no_of_weekend_nights > 1:
+    ##                     :       :           :       :...arrival_date > 23: 1 (12)
+    ##                     :       :           :       :   arrival_date <= 23: [S8]
+    ##                     :       :           :       no_of_weekend_nights <= 1: [S9]
+    ##                     :       :           lead_time > 3:
+    ##                     :       :           :...arrival_year <= 2017: 0 (44/6)
+    ##                     :       :               arrival_year > 2017: [S10]
+    ##                     :       lead_time > 13:
+    ##                     :       :...arrival_year <= 2017:
+    ##                     :           :...lead_time <= 81: 0 (129/20)
+    ##                     :           :   lead_time > 81: [S11]
+    ##                     :           arrival_year > 2017:
+    ##                     :           :...avg_price_per_room > 109.25: 1 (1243/308)
+    ##                     :               avg_price_per_room <= 109.25:
+    ##                     :               :...avg_price_per_room <= 56.52: 0 (28/3)
+    ##                     :                   avg_price_per_room > 56.52:
+    ##                     :                   :...type_of_meal_planMeal Plan 1 > 0:
+    ##                     :                       :...no_of_adults <= 1: 1 (140/48)
+    ##                     :                       :   no_of_adults > 1: [S12]
+    ##                     :                       type_of_meal_planMeal Plan 1 <= 0: [S13]
+    ##                     market_segment_typeOnline <= 0:
+    ##                     :...lead_time <= 74:
+    ##                         :...avg_price_per_room > 183.3:
+    ##                         :   :...avg_price_per_room <= 201.5: 0 (19)
+    ##                         :   :   avg_price_per_room > 201.5: 1 (14)
+    ##                         :   avg_price_per_room <= 183.3:
+    ##                         :   :...no_of_weekend_nights <= 0:
+    ##                         :       :...market_segment_typeOffline > 0: 0 (1073)
+    ##                         :       :   market_segment_typeOffline <= 0:
+    ##                         :       :   :...room_type_reservedRoom_Type 4 <= 0:
+    ##                         :       :       :...avg_price_per_room <= 130.5: 0 (364/35)
+    ##                         :       :       :   avg_price_per_room > 130.5:
+    ##                         :       :       :   :...lead_time <= 38: 0 (18/3)
+    ##                         :       :       :       lead_time > 38: 1 (7)
+    ##                         :       :       room_type_reservedRoom_Type 4 > 0:
+    ##                         :       :       :...arrival_date <= 9: 0 (12)
+    ##                         :       :           arrival_date > 9:
+    ##                         :       :           :...no_of_adults > 1:
+    ##                         :       :               :...arrival_month <= 7: 1 (10/2)
+    ##                         :       :               :   arrival_month > 7: 0 (4)
+    ##                         :       :               no_of_adults <= 1: [S14]
+    ##                         :       no_of_weekend_nights > 0:
+    ##                         :       :...lead_time > 65:
+    ##                         :           :...no_of_adults <= 1: 1 (28/1)
+    ##                         :           :   no_of_adults > 1:
+    ##                         :           :   :...arrival_year > 2017: 0 (37/4)
+    ##                         :           :       arrival_year <= 2017: [S15]
+    ##                         :           lead_time <= 65:
+    ##                         :           :...lead_time <= 1:
+    ##                         :               :...arrival_month > 2: 0 (64/5)
+    ##                         :               :   arrival_month <= 2:
+    ##                         :               :   :...arrival_date <= 27: 0 (4)
+    ##                         :               :       arrival_date > 27: 1 (26)
+    ##                         :               lead_time > 1:
+    ##                         :               :...arrival_month > 9: 0 (362/9)
+    ##                         :                   arrival_month <= 9:
+    ##                         :                   :...arrival_year > 2017: 0 (390/41)
+    ##                         :                       arrival_year <= 2017:
+    ##                         :                       :...no_of_weekend_nights > 1:
+    ##                         :                           :...lead_time <= 2: 1 (6/1)
+    ##                         :                           :   lead_time > 2: 0 (24/1)
+    ##                         :                           no_of_weekend_nights <= 1: [S16]
+    ##                         lead_time > 74:
+    ##                         :...no_of_week_nights <= 0:
+    ##                             :...avg_price_per_room <= 92.5: 0 (10/2)
+    ##                             :   avg_price_per_room > 92.5:
+    ##                             :   :...arrival_date <= 9: 0 (4/1)
+    ##                             :       arrival_date > 9: 1 (41)
+    ##                             no_of_week_nights > 0:
+    ##                             :...arrival_month > 11: 0 (83)
+    ##                                 arrival_month <= 11:
+    ##                                 :...avg_price_per_room <= 58.65: 0 (32)
+    ##                                     avg_price_per_room > 58.65: [S17]
+    ## 
+    ## SubTree [S1]
+    ## 
+    ## avg_price_per_room <= 70.4: 1 (9)
+    ## avg_price_per_room > 70.4: 0 (13/1)
+    ## 
+    ## SubTree [S2]
+    ## 
+    ## avg_price_per_room > 94: 1 (66)
+    ## avg_price_per_room <= 94:
+    ## :...lead_time > 320: 1 (46)
+    ##     lead_time <= 320:
+    ##     :...avg_price_per_room > 90.46: 0 (4)
+    ##         avg_price_per_room <= 90.46:
+    ##         :...avg_price_per_room > 73.6: 1 (50/2)
+    ##             avg_price_per_room <= 73.6:
+    ##             :...arrival_month <= 5: 0 (4)
+    ##                 arrival_month > 5:
+    ##                 :...arrival_month <= 7: 1 (14/1)
+    ##                     arrival_month > 7: 0 (3)
+    ## 
+    ## SubTree [S3]
+    ## 
+    ## type_of_meal_planMeal Plan 2 > 0: 1 (3)
+    ## type_of_meal_planMeal Plan 2 <= 0:
+    ## :...no_of_children <= 0: 0 (38/16)
+    ##     no_of_children > 0: 1 (13/3)
+    ## 
+    ## SubTree [S4]
+    ## 
+    ## arrival_date <= 26: 1 (22)
+    ## arrival_date > 26: 0 (6)
+    ## 
+    ## SubTree [S5]
+    ## 
+    ## no_of_weekend_nights > 1: 0 (28/4)
+    ## no_of_weekend_nights <= 1:
+    ## :...arrival_month <= 6: 1 (16/5)
+    ##     arrival_month > 6: 0 (28/10)
+    ## 
+    ## SubTree [S6]
+    ## 
+    ## room_type_reservedRoom_Type 2 <= 0: 1 (22/5)
+    ## room_type_reservedRoom_Type 2 > 0: 0 (2)
+    ## 
+    ## SubTree [S7]
+    ## 
+    ## no_of_week_nights > 1: 0 (222/80)
+    ## no_of_week_nights <= 1:
+    ## :...arrival_month <= 10:
+    ##     :...no_of_weekend_nights <= 1: 0 (70/25)
+    ##     :   no_of_weekend_nights > 1: 1 (40/17)
+    ##     arrival_month > 10:
+    ##     :...arrival_date <= 6: 1 (16)
+    ##         arrival_date > 6: 0 (11/3)
+    ## 
+    ## SubTree [S8]
+    ## 
+    ## avg_price_per_room <= 79.82: 1 (2)
+    ## avg_price_per_room > 79.82: 0 (7)
+    ## 
+    ## SubTree [S9]
+    ## 
+    ## room_type_reservedRoom_Type 4 <= 0: 0 (128/24)
+    ## room_type_reservedRoom_Type 4 > 0:
+    ## :...lead_time > 2: 1 (5)
+    ##     lead_time <= 2:
+    ##     :...avg_price_per_room > 114.33: 0 (7)
+    ##         avg_price_per_room <= 114.33:
+    ##         :...no_of_weekend_nights <= 0: 0 (2)
+    ##             no_of_weekend_nights > 0: 1 (4)
+    ## 
+    ## SubTree [S10]
+    ## 
+    ## avg_price_per_room > 119.25: 1 (144/47)
+    ## avg_price_per_room <= 119.25:
+    ## :...avg_price_per_room <= 57.52: 0 (11)
+    ##     avg_price_per_room > 57.52:
+    ##     :...no_of_week_nights > 1: 1 (72/32)
+    ##         no_of_week_nights <= 1:
+    ##         :...no_of_adults <= 1: 0 (44/8)
+    ##             no_of_adults > 1:
+    ##             :...lead_time <= 8: 0 (36/9)
+    ##                 lead_time > 8: 1 (16/5)
+    ## 
+    ## SubTree [S11]
+    ## 
+    ## type_of_meal_planMeal Plan 2 > 0: 1 (32)
+    ## type_of_meal_planMeal Plan 2 <= 0:
+    ## :...no_of_weekend_nights > 1: 1 (17/2)
+    ##     no_of_weekend_nights <= 1:
+    ##     :...arrival_month <= 7: 1 (4)
+    ##         arrival_month > 7: 0 (21/7)
+    ## 
+    ## SubTree [S12]
+    ## 
+    ## avg_price_per_room > 73.92: 1 (475/219)
+    ## avg_price_per_room <= 73.92:
+    ## :...arrival_month <= 7: 0 (49/10)
+    ##     arrival_month > 7:
+    ##     :...arrival_month <= 11: 1 (6/1)
+    ##         arrival_month > 11: 0 (3)
+    ## 
+    ## SubTree [S13]
+    ## 
+    ## avg_price_per_room > 102.15: 1 (69/9)
+    ## avg_price_per_room <= 102.15:
+    ## :...no_of_adults <= 1:
+    ##     :...type_of_meal_planMeal Plan 2 <= 0: 0 (24/9)
+    ##     :   type_of_meal_planMeal Plan 2 > 0: 1 (2)
+    ##     no_of_adults > 1:
+    ##     :...lead_time <= 27:
+    ##         :...arrival_month > 11: 0 (12)
+    ##         :   arrival_month <= 11:
+    ##         :   :...no_of_week_nights <= 0: 0 (4)
+    ##         :       no_of_week_nights > 0:
+    ##         :       :...lead_time <= 24: 1 (34/10)
+    ##         :           lead_time > 24: 0 (3)
+    ##         lead_time > 27:
+    ##         :...no_of_week_nights <= 1:
+    ##             :...lead_time <= 141: 1 (93/30)
+    ##             :   lead_time > 141: 0 (5/1)
+    ##             no_of_week_nights > 1:
+    ##             :...arrival_month > 3: 1 (123/21)
+    ##                 arrival_month <= 3:
+    ##                 :...lead_time <= 75: 1 (40/11)
+    ##                     lead_time > 75: 0 (12/2)
+    ## 
+    ## SubTree [S14]
+    ## 
+    ## no_of_week_nights > 2: 0 (7)
+    ## no_of_week_nights <= 2:
+    ## :...lead_time <= 9: 0 (9/3)
+    ##     lead_time > 9: 1 (4)
+    ## 
+    ## SubTree [S15]
+    ## 
+    ## no_of_weekend_nights <= 1: 1 (8/2)
+    ## no_of_weekend_nights > 1: 0 (4)
+    ## 
+    ## SubTree [S16]
+    ## 
+    ## no_of_adults <= 1: 0 (4)
+    ## no_of_adults > 1:
+    ## :...lead_time <= 24: 1 (8)
+    ##     lead_time > 24:
+    ##     :...avg_price_per_room <= 54.31: 1 (2)
+    ##         avg_price_per_room > 54.31: 0 (7)
+    ## 
+    ## SubTree [S17]
+    ## 
+    ## room_type_reservedRoom_Type 4 > 0: 0 (50/4)
+    ## room_type_reservedRoom_Type 4 <= 0:
+    ## :...avg_price_per_room <= 65.45:
+    ##     :...arrival_date <= 26: 0 (34/9)
+    ##     :   arrival_date > 26: 1 (27)
+    ##     avg_price_per_room > 65.45:
+    ##     :...arrival_month <= 2: 0 (104/2)
+    ##         arrival_month > 2:
+    ##         :...arrival_month <= 4:
+    ##             :...lead_time > 109: 0 (38/5)
+    ##             :   lead_time <= 109:
+    ##             :   :...no_of_week_nights > 3: 0 (8)
+    ##             :       no_of_week_nights <= 3:
+    ##             :       :...lead_time > 90: 1 (64/2)
+    ##             :           lead_time <= 90:
+    ##             :           :...lead_time <= 78: 1 (17/1)
+    ##             :               lead_time > 78: 0 (8/1)
+    ##             arrival_month > 4:
+    ##             :...lead_time <= 92: 0 (150/8)
+    ##                 lead_time > 92:
+    ##                 :...arrival_date > 29: 1 (24/2)
+    ##                     arrival_date <= 29:
+    ##                     :...arrival_year <= 2017:
+    ##                         :...avg_price_per_room <= 108.5:
+    ##                         :   :...avg_price_per_room <= 98: 0 (109/44)
+    ##                         :   :   avg_price_per_room > 98: 1 (33)
+    ##                         :   avg_price_per_room > 108.5:
+    ##                         :   :...lead_time <= 104: 0 (31/1)
+    ##                         :       lead_time > 104: 1 (6)
+    ##                         arrival_year > 2017:
+    ##                         :...arrival_date <= 1:
+    ##                             :...no_of_adults <= 1: 1 (13)
+    ##                             :   no_of_adults > 1: 0 (6/1)
+    ##                             arrival_date > 1:
+    ##                             :...avg_price_per_room > 114.25:
+    ##                                 :...no_of_week_nights > 2: 1 (7)
+    ##                                 :   no_of_week_nights <= 2:
+    ##                                 :   :...lead_time <= 99: 1 (7)
+    ##                                 :       lead_time > 99: 0 (18/2)
+    ##                                 avg_price_per_room <= 114.25:
+    ##                                 :...avg_price_per_room > 101.1: 0 (55)
+    ##                                     avg_price_per_room <= 101.1:
+    ##                                     :...avg_price_per_room <= 89.85: 0 (101/13)
+    ##                                         avg_price_per_room > 89.85:
+    ##                                         :...lead_time <= 106: 1 (6)
+    ##                                             lead_time > 106:
+    ##                                             :...no_of_weekend_nights <= 0:
+    ##                                                 :...lead_time <= 145: 0 (21/1)
+    ##                                                 :   lead_time > 145: 1 (2)
+    ##                                                 no_of_weekend_nights > 0:
+    ##                                                 :...arrival_date <= 20: 0 (4)
+    ##                                                     arrival_date > 20: 1 (10)
+    ## 
+    ## 
+    ## Evaluation on training data (18137 cases):
+    ## 
+    ##      Decision Tree   
+    ##    ----------------  
+    ##    Size      Errors  
+    ## 
+    ##     196 1946(10.7%)   <<
+    ## 
+    ## 
+    ##     (a)   (b)    <-classified as
+    ##    ----  ----
+    ##   11362   845    (a): class 0
+    ##    1101  4829    (b): class 1
+    ## 
+    ## 
+    ##  Attribute usage:
+    ## 
+    ##  100.00% lead_time
+    ##   94.88% no_of_special_requests
+    ##   83.00% no_of_week_nights
+    ##   80.38% repeated_guest
+    ##   77.93% required_car_parking_space
+    ##   72.74% avg_price_per_room
+    ##   67.84% arrival_month
+    ##   40.31% market_segment_typeOffline
+    ##   40.01% market_segment_typeOnline
+    ##   34.21% arrival_year
+    ##   22.12% no_of_weekend_nights
+    ##   14.03% no_of_adults
+    ##   11.37% type_of_meal_planMeal Plan 2
+    ##    8.46% room_type_reservedRoom_Type 4
+    ##    7.96% type_of_meal_planMeal Plan 1
+    ##    4.38% arrival_date
+    ##    0.28% no_of_children
+    ##    0.13% room_type_reservedRoom_Type 2
+    ## 
+    ## 
+    ## Time: 0.1 secs
 
 The decision tree relies most heavily on a few key predictors. **Lead
 time** is by far the strongest driver of cancellation behavior,
@@ -1021,13 +1156,13 @@ rf_model <- randomForest(
 plot(rf_model)
 ```
 
-![](PreliminaryModel_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
+![](PreliminaryModel_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
 
 ``` r
 varImpPlot(rf_model)
 ```
 
-![](PreliminaryModel_files/figure-gfm/unnamed-chunk-14-2.png)<!-- -->
+![](PreliminaryModel_files/figure-gfm/unnamed-chunk-13-2.png)<!-- -->
 
 The first plot shows the **error rate** as the forest grows. The
 **overall error** (black line) reflects the model’s total
@@ -1073,10 +1208,16 @@ most true cancellations.
 
 ### Step 5.1: Predict LogReg
 
+#### Basic LogReg
+
 ``` r
 logreg_prob <- predict(logreg_model, newdata = hotel_test, type = "response")
 pred_logreg <- ifelse(logreg_prob >= 0.7, 1, 0)
+```
 
+#### Enhanced LogReg
+
+``` r
 logreg_enh_prob <- predict(logreg_model_enhanced, newdata = hotel_test, type = "response")
 pred_logreg_enh <- ifelse(logreg_enh_prob >= 0.7, 1, 0)
 ```
@@ -1127,27 +1268,27 @@ results
 ```
 
     ##             k  Accuracy Specificity
-    ## Accuracy    1 0.8331342   0.8680764
-    ## Accuracy1   3 0.8269779   0.9515689
-    ## Accuracy2   5 0.8346963   0.9414734
-    ## Accuracy3   7 0.8385555   0.9342428
-    ## Accuracy4   9 0.8278967   0.9523874
-    ## Accuracy5  11 0.8303777   0.9482947
-    ## Accuracy6  13 0.8185243   0.9611187
-    ## Accuracy7  15 0.8177892   0.9544338
-    ## Accuracy8  17 0.8230267   0.9512960
-    ## Accuracy9  19 0.8139300   0.9587995
-    ## Accuracy10 21 0.8175136   0.9557981
-    ## Accuracy11 23 0.8084168   0.9611187
-    ## Accuracy12 25 0.8090600   0.9583902
-    ## Accuracy13 27 0.8118166   0.9566166
-    ## Accuracy14 29 0.8023523   0.9577080
-    ## Accuracy15 31 0.8042819   0.9557981
+    ## Accuracy    1 0.8361451   0.8787655
+    ## Accuracy1   3 0.8260558   0.9604367
+    ## Accuracy2   5 0.8299151   0.9491915
+    ## Accuracy3   7 0.8310178   0.9418862
+    ## Accuracy4   9 0.8192745   0.9592055
+    ## Accuracy5  11 0.8185577   0.9526389
+    ## Accuracy6  13 0.8084684   0.9633916
+    ## Accuracy7  15 0.8108391   0.9590413
+    ## Accuracy8  17 0.8126034   0.9568251
+    ## Accuracy9  19 0.8056566   0.9648691
+    ## Accuracy10 21 0.8069798   0.9616679
+    ## Accuracy11 23 0.7982688   0.9679882
+    ## Accuracy12 25 0.8013563   0.9656899
+    ## Accuracy13 27 0.7999228   0.9625708
+    ## Accuracy14 29 0.7945749   0.9683986
+    ## Accuracy15 31 0.7935274   0.9656899
 
 Based on our KNN tuning results, the optimal value of **k = 13**
 achieves the best balance for our business objective. Although its
-overall accuracy is **81.9%**, it delivers the **highest specificity
-(96.1%)** of all tested values. Because false positives (walking guests)
+overall accuracy is **80.8%**, it delivers the **highest specificity
+(96.3%)** of all tested values. Because false positives (walking guests)
 carry the largest financial penalty in our cost structure, this high
 specificity makes k = 13 the most practical choice for minimizing
 expensive overbooking errors while still maintaining reasonable
@@ -1176,7 +1317,8 @@ knn_binary_final <- ifelse(knn_prob_final >= 0.7, 1, 0)
 ### Step 5.3: Predict ANN
 
 ``` r
-ann_prob <- predict(ann_model, hotel_test_scaled)
+ann_prob_raw <- predict(ann_model, hotel_test_scaled)
+ann_prob <- ann_prob_raw[, 1] 
 pred_ann <- ifelse(ann_prob >= 0.7, 1, 0)
 ```
 
@@ -1189,7 +1331,7 @@ pred_dt <- ifelse(dt_prob >= 0.7, 1, 0)
 
 ### Step 5.5: Predict SVM
 
-Basic SVM
+#### Basic SVM
 
 ``` r
 svm_rbf_prob <- predict(hotel_svm_basic, hotel_test_scaled, type = "probabilities")
@@ -1197,7 +1339,7 @@ svm_rbf_prob_class1 <- svm_rbf_prob[, "1"]
 pred_svm_basic <- ifelse(svm_rbf_prob_class1 >= 0.7, 1, 0)
 ```
 
-Enhanced SVM
+#### Enhanced SVM
 
 ``` r
 svm_rbf_enhanced <- predict(hotel_svm_enhanced, hotel_test_scaled, type = "probabilities")
@@ -1216,7 +1358,7 @@ pred_rf <- ifelse(rf_prob >= 0.7, 1, 0)
 
 ### Step 6.1: Evaluate LogReg Models
 
-Basic LogReg
+#### Basic LogReg
 
 ``` r
 confusionMatrix(as.factor(pred_logreg), as.factor(hotel_test$booking_status), positive = "1")
@@ -1225,42 +1367,42 @@ confusionMatrix(as.factor(pred_logreg), as.factor(hotel_test$booking_status), po
     ## Confusion Matrix and Statistics
     ## 
     ##           Reference
-    ## Prediction    0    1
-    ##          0 7011 2110
-    ##          1  319 1443
+    ## Prediction     0     1
+    ##          0 11681  3593
+    ##          1   502  2362
     ##                                           
-    ##                Accuracy : 0.7768          
-    ##                  95% CI : (0.7689, 0.7846)
-    ##     No Information Rate : 0.6735          
+    ##                Accuracy : 0.7742          
+    ##                  95% CI : (0.7681, 0.7803)
+    ##     No Information Rate : 0.6717          
     ##     P-Value [Acc > NIR] : < 2.2e-16       
     ##                                           
-    ##                   Kappa : 0.4167          
+    ##                   Kappa : 0.4098          
     ##                                           
     ##  Mcnemar's Test P-Value : < 2.2e-16       
     ##                                           
-    ##             Sensitivity : 0.4061          
-    ##             Specificity : 0.9565          
-    ##          Pos Pred Value : 0.8190          
-    ##          Neg Pred Value : 0.7687          
-    ##              Prevalence : 0.3265          
-    ##          Detection Rate : 0.1326          
-    ##    Detection Prevalence : 0.1619          
-    ##       Balanced Accuracy : 0.6813          
+    ##             Sensitivity : 0.3966          
+    ##             Specificity : 0.9588          
+    ##          Pos Pred Value : 0.8247          
+    ##          Neg Pred Value : 0.7648          
+    ##              Prevalence : 0.3283          
+    ##          Detection Rate : 0.1302          
+    ##    Detection Prevalence : 0.1579          
+    ##       Balanced Accuracy : 0.6777          
     ##                                           
     ##        'Positive' Class : 1               
     ## 
 
 The baseline logistic regression model achieved an accuracy of
-**77.7%**, meaning it correctly classified a little over three out of
+**77.4%**, meaning it correctly classified a little over three out of
 every four reservations. However, its performance is highly unbalanced
-across classes. The model’s **sensitivity is only 40.6%**, meaning it
+across classes. The model’s **sensitivity is only 39.7%**, meaning it
 detects fewer than half of all true cancellations. In contrast, its
-**specificity is very high at 95.6%**, indicating that it is excellent
+**specificity is very high at 95.9%**, indicating that it is excellent
 at correctly identifying guests who will *not* cancel.
 
-**Business Case Usefullness: Low**
+**Business Case Usefulness: Low**
 
-Enhanced LogReg
+#### Enhanced LogReg
 
 ``` r
 confusionMatrix(as.factor(pred_logreg_enh), as.factor(hotel_test$booking_status), positive = "1")
@@ -1269,33 +1411,33 @@ confusionMatrix(as.factor(pred_logreg_enh), as.factor(hotel_test$booking_status)
     ## Confusion Matrix and Statistics
     ## 
     ##           Reference
-    ## Prediction    0    1
-    ##          0 7058 2029
-    ##          1  272 1524
+    ## Prediction     0     1
+    ##          0 11744  3435
+    ##          1   439  2520
     ##                                           
-    ##                Accuracy : 0.7886          
-    ##                  95% CI : (0.7808, 0.7962)
-    ##     No Information Rate : 0.6735          
+    ##                Accuracy : 0.7864          
+    ##                  95% CI : (0.7804, 0.7924)
+    ##     No Information Rate : 0.6717          
     ##     P-Value [Acc > NIR] : < 2.2e-16       
     ##                                           
-    ##                   Kappa : 0.449           
+    ##                   Kappa : 0.4443          
     ##                                           
     ##  Mcnemar's Test P-Value : < 2.2e-16       
     ##                                           
-    ##             Sensitivity : 0.4289          
-    ##             Specificity : 0.9629          
-    ##          Pos Pred Value : 0.8486          
-    ##          Neg Pred Value : 0.7767          
-    ##              Prevalence : 0.3265          
-    ##          Detection Rate : 0.1400          
-    ##    Detection Prevalence : 0.1650          
-    ##       Balanced Accuracy : 0.6959          
+    ##             Sensitivity : 0.4232          
+    ##             Specificity : 0.9640          
+    ##          Pos Pred Value : 0.8516          
+    ##          Neg Pred Value : 0.7737          
+    ##              Prevalence : 0.3283          
+    ##          Detection Rate : 0.1389          
+    ##    Detection Prevalence : 0.1631          
+    ##       Balanced Accuracy : 0.6936          
     ##                                           
     ##        'Positive' Class : 1               
     ## 
 
 The enhanced logistic regression improves slightly across all metrics,
-with better **sensitivity (43%)** and **balanced accuracy (69.6%).**
+with better **sensitivity (42.3%)** and **balanced accuracy (69.4%).**
 However, it still misses the majority of true cancellations, limiting
 its usefulness for overbooking optimization. Although it reduces
 financial risk relative to the basic model, its predictive power is
@@ -1313,36 +1455,36 @@ confusionMatrix(as.factor(knn_binary_final), as.factor(test_labels), positive = 
     ## Confusion Matrix and Statistics
     ## 
     ##           Reference
-    ## Prediction    0    1
-    ##          0 7045 1690
-    ##          1  285 1863
+    ## Prediction     0     1
+    ##          0 11737  3028
+    ##          1   446  2927
     ##                                           
-    ##                Accuracy : 0.8185          
-    ##                  95% CI : (0.8112, 0.8257)
-    ##     No Information Rate : 0.6735          
+    ##                Accuracy : 0.8085          
+    ##                  95% CI : (0.8027, 0.8142)
+    ##     No Information Rate : 0.6717          
     ##     P-Value [Acc > NIR] : < 2.2e-16       
     ##                                           
-    ##                   Kappa : 0.5405          
+    ##                   Kappa : 0.5116          
     ##                                           
     ##  Mcnemar's Test P-Value : < 2.2e-16       
     ##                                           
-    ##             Sensitivity : 0.5243          
-    ##             Specificity : 0.9611          
-    ##          Pos Pred Value : 0.8673          
-    ##          Neg Pred Value : 0.8065          
-    ##              Prevalence : 0.3265          
-    ##          Detection Rate : 0.1712          
-    ##    Detection Prevalence : 0.1974          
-    ##       Balanced Accuracy : 0.7427          
+    ##             Sensitivity : 0.4915          
+    ##             Specificity : 0.9634          
+    ##          Pos Pred Value : 0.8678          
+    ##          Neg Pred Value : 0.7949          
+    ##              Prevalence : 0.3283          
+    ##          Detection Rate : 0.1614          
+    ##    Detection Prevalence : 0.1860          
+    ##       Balanced Accuracy : 0.7275          
     ##                                           
     ##        'Positive' Class : 1               
     ## 
 
-The KNN model shows a meaningful improvement with **accuracy at 81.9%**
-and **balanced accuracy at 74.3%.** **Sensitivity rises to 52%**, which
-means it detects over half of cancellations—a notable improvement over
-logistic regression. **Specificity remains high (96%)**, which helps
-avoid costly false positives. While KNN is not the strongest model
+The KNN model shows a meaningful improvement with **accuracy at 80.9%**
+and **balanced accuracy at 72.8%.** **Sensitivity rises to 49.2%**,
+which means it detects about half of cancellations—a notable improvement
+over logistic regression. **Specificity remains high (96.3%)**, which
+helps avoid costly false positives. While KNN is not the strongest model
 available, it delivers moderate predictive capability and could be
 applied cautiously to guide overbooking under conservative thresholds.
 
@@ -1357,39 +1499,42 @@ confusionMatrix(as.factor(pred_ann), as.factor(hotel_test_scaled$booking_status)
     ## Confusion Matrix and Statistics
     ## 
     ##           Reference
-    ## Prediction    0    1
-    ##          0 6683 1434
-    ##          1  647 2119
+    ## Prediction     0     1
+    ##          0 11655  3459
+    ##          1   528  2496
     ##                                           
-    ##                Accuracy : 0.8088          
-    ##                  95% CI : (0.8013, 0.8161)
-    ##     No Information Rate : 0.6735          
+    ##                Accuracy : 0.7802          
+    ##                  95% CI : (0.7741, 0.7862)
+    ##     No Information Rate : 0.6717          
     ##     P-Value [Acc > NIR] : < 2.2e-16       
     ##                                           
-    ##                   Kappa : 0.5389          
+    ##                   Kappa : 0.4299          
     ##                                           
     ##  Mcnemar's Test P-Value : < 2.2e-16       
     ##                                           
-    ##             Sensitivity : 0.5964          
-    ##             Specificity : 0.9117          
-    ##          Pos Pred Value : 0.7661          
-    ##          Neg Pred Value : 0.8233          
-    ##              Prevalence : 0.3265          
-    ##          Detection Rate : 0.1947          
-    ##    Detection Prevalence : 0.2542          
-    ##       Balanced Accuracy : 0.7541          
+    ##             Sensitivity : 0.4191          
+    ##             Specificity : 0.9567          
+    ##          Pos Pred Value : 0.8254          
+    ##          Neg Pred Value : 0.7711          
+    ##              Prevalence : 0.3283          
+    ##          Detection Rate : 0.1376          
+    ##    Detection Prevalence : 0.1667          
+    ##       Balanced Accuracy : 0.6879          
     ##                                           
     ##        'Positive' Class : 1               
     ## 
 
-The ANN achieves strong balance between **sensitivity (60%) and
-specificity (91%).** This sensitivity level is significantly better than
-linear models, meaning the ANN captures more cancellations and provides
-more actionable predictions for revenue optimization. The slightly lower
-specificity does **increase risk of false overbookings**, but the
-overall **balanced accuracy (75.4%)** suggests a reliable signal.
+The ANN model achieves a modest balance between **sensitivity (41.9%)**
+and **specificity (95.7%)**. Its sensitivity is around the same mark as
+the linear models, and it still misses most true cancellations, limiting
+its usefulness for overbooking decisions where identifying high-risk
+reservations is critical. Specificity remains very strong, meaning the
+ANN reliably recognizes guests who will *not* cancel, but this comes at
+the cost of under-detecting cancellations. With a **balanced accuracy of
+68.8%**, the ANN provides only a minor improvement in signal quality
+over simpler models.
 
-**Business Case Usefulness: Moderate–High**
+**Business Case Usefulness: Moderate**
 
 ### Step 6.4: Evaluate Decision Tree
 
@@ -1400,44 +1545,44 @@ confusionMatrix(as.factor(pred_dt), as.factor(hotel_test$booking_status), positi
     ## Confusion Matrix and Statistics
     ## 
     ##           Reference
-    ## Prediction    0    1
-    ##          0 6945  924
-    ##          1  385 2629
+    ## Prediction     0     1
+    ##          0 11687  1883
+    ##          1   496  4072
     ##                                           
-    ##                Accuracy : 0.8797          
-    ##                  95% CI : (0.8735, 0.8858)
-    ##     No Information Rate : 0.6735          
+    ##                Accuracy : 0.8688          
+    ##                  95% CI : (0.8638, 0.8737)
+    ##     No Information Rate : 0.6717          
     ##     P-Value [Acc > NIR] : < 2.2e-16       
     ##                                           
-    ##                   Kappa : 0.7154          
+    ##                   Kappa : 0.6838          
     ##                                           
     ##  Mcnemar's Test P-Value : < 2.2e-16       
     ##                                           
-    ##             Sensitivity : 0.7399          
-    ##             Specificity : 0.9475          
-    ##          Pos Pred Value : 0.8723          
-    ##          Neg Pred Value : 0.8826          
-    ##              Prevalence : 0.3265          
-    ##          Detection Rate : 0.2416          
-    ##    Detection Prevalence : 0.2769          
-    ##       Balanced Accuracy : 0.8437          
+    ##             Sensitivity : 0.6838          
+    ##             Specificity : 0.9593          
+    ##          Pos Pred Value : 0.8914          
+    ##          Neg Pred Value : 0.8612          
+    ##              Prevalence : 0.3283          
+    ##          Detection Rate : 0.2245          
+    ##    Detection Prevalence : 0.2518          
+    ##       Balanced Accuracy : 0.8215          
     ##                                           
     ##        'Positive' Class : 1               
     ## 
 
 The decision tree delivers strong performance across key metrics: **high
-sensitivity (74%), high specificity (95%), and leading balanced accuracy
-(84.4%).** This combination makes it effective at identifying both
-cancellations and non-cancellations. It minimizes both lost revenue and
-overbooking penalties, making it a very strong candidate for operational
-use. Its interpretability also helps hotel managers understand risk
-factors.
+sensitivity (68.4%), high specificity (96%), and leading balanced
+accuracy (82.2%).** This combination makes it effective at identifying
+both cancellations and non-cancellations. It minimizes both lost revenue
+and overbooking penalties, making it a very strong candidate for
+operational use. Its interpretability also helps hotel managers
+understand risk factors.
 
 **Business Case Usefulness: High**
 
 ### Step 6.5: Evaluate SVM
 
-Basic SVM
+#### Basic SVM
 
 ``` r
 confusionMatrix(as.factor(pred_svm_basic), as.factor(hotel_test_scaled$booking_status), positive = "1")
@@ -1446,40 +1591,40 @@ confusionMatrix(as.factor(pred_svm_basic), as.factor(hotel_test_scaled$booking_s
     ## Confusion Matrix and Statistics
     ## 
     ##           Reference
-    ## Prediction    0    1
-    ##          0 6616 1335
-    ##          1  714 2218
-    ##                                          
-    ##                Accuracy : 0.8117         
-    ##                  95% CI : (0.8043, 0.819)
-    ##     No Information Rate : 0.6735         
-    ##     P-Value [Acc > NIR] : < 2.2e-16      
-    ##                                          
-    ##                   Kappa : 0.5517         
-    ##                                          
-    ##  Mcnemar's Test P-Value : < 2.2e-16      
-    ##                                          
-    ##             Sensitivity : 0.6243         
-    ##             Specificity : 0.9026         
-    ##          Pos Pred Value : 0.7565         
-    ##          Neg Pred Value : 0.8321         
-    ##              Prevalence : 0.3265         
-    ##          Detection Rate : 0.2038         
-    ##    Detection Prevalence : 0.2694         
-    ##       Balanced Accuracy : 0.7634         
-    ##                                          
-    ##        'Positive' Class : 1              
+    ## Prediction     0     1
+    ##          0 11648  2701
+    ##          1   535  3254
+    ##                                           
+    ##                Accuracy : 0.8216          
+    ##                  95% CI : (0.8159, 0.8271)
+    ##     No Information Rate : 0.6717          
+    ##     P-Value [Acc > NIR] : < 2.2e-16       
+    ##                                           
+    ##                   Kappa : 0.554           
+    ##                                           
+    ##  Mcnemar's Test P-Value : < 2.2e-16       
+    ##                                           
+    ##             Sensitivity : 0.5464          
+    ##             Specificity : 0.9561          
+    ##          Pos Pred Value : 0.8588          
+    ##          Neg Pred Value : 0.8118          
+    ##              Prevalence : 0.3283          
+    ##          Detection Rate : 0.1794          
+    ##    Detection Prevalence : 0.2089          
+    ##       Balanced Accuracy : 0.7513          
+    ##                                           
+    ##        'Positive' Class : 1               
     ## 
 
-The basic SVM model achieves solid **sensitivity (62%) and balanced
-accuracy (76.3%)**, outperforming logistic regression and KNN. This
+The basic SVM model achieves solid **sensitivity (54.6%) and balanced
+accuracy (75.1%)**, outperforming logistic regression and KNN. This
 means it captures a larger share of cancellations while maintaining good
 specificity. The model presents a good compromise between detecting
 cancellation risk and avoiding false positives.
 
 **Business Case Usefulness: Moderate–High**
 
-Enhanced SVM
+#### Enhanced SVM
 
 ``` r
 confusionMatrix(as.factor(pred_svm_enhanced), as.factor(hotel_test_scaled$booking_status), positive = "1")
@@ -1488,37 +1633,39 @@ confusionMatrix(as.factor(pred_svm_enhanced), as.factor(hotel_test_scaled$bookin
     ## Confusion Matrix and Statistics
     ## 
     ##           Reference
-    ## Prediction    0    1
-    ##          0 6799 1435
-    ##          1  531 2118
-    ##                                          
-    ##                Accuracy : 0.8194         
-    ##                  95% CI : (0.812, 0.8265)
-    ##     No Information Rate : 0.6735         
-    ##     P-Value [Acc > NIR] : < 2.2e-16      
-    ##                                          
-    ##                   Kappa : 0.5604         
-    ##                                          
-    ##  Mcnemar's Test P-Value : < 2.2e-16      
-    ##                                          
-    ##             Sensitivity : 0.5961         
-    ##             Specificity : 0.9276         
-    ##          Pos Pred Value : 0.7995         
-    ##          Neg Pred Value : 0.8257         
-    ##              Prevalence : 0.3265         
-    ##          Detection Rate : 0.1946         
-    ##    Detection Prevalence : 0.2434         
-    ##       Balanced Accuracy : 0.7618         
-    ##                                          
-    ##        'Positive' Class : 1              
+    ## Prediction     0     1
+    ##          0 11633  2433
+    ##          1   550  3522
+    ##                                           
+    ##                Accuracy : 0.8355          
+    ##                  95% CI : (0.8301, 0.8409)
+    ##     No Information Rate : 0.6717          
+    ##     P-Value [Acc > NIR] : < 2.2e-16       
+    ##                                           
+    ##                   Kappa : 0.5943          
+    ##                                           
+    ##  Mcnemar's Test P-Value : < 2.2e-16       
+    ##                                           
+    ##             Sensitivity : 0.5914          
+    ##             Specificity : 0.9549          
+    ##          Pos Pred Value : 0.8649          
+    ##          Neg Pred Value : 0.8270          
+    ##              Prevalence : 0.3283          
+    ##          Detection Rate : 0.1942          
+    ##    Detection Prevalence : 0.2245          
+    ##       Balanced Accuracy : 0.7731          
+    ##                                           
+    ##        'Positive' Class : 1               
     ## 
 
-The enhanced SVM model shows slightly higher overall **accuracy
-(81.9%)** and maintains a strong balance between **sensitivity (60%) and
-specificity (93%).** While its sensitivity is slightly lower than the
-basic SVM, the improvement in specificity helps reduce costly false
-overbookings. Overall, it remains a robust and reliable model for
-supporting overbooking policies and is the better option than basic SVM.
+The enhanced SVM model shows slightly higher overall accuracy
+(**83.6%**) and maintains a strong balance between sensitivity
+(**59.1%**) and specificity (**95.5%**). Its sensitivity improves over
+the basic SVM, allowing it to detect more true cancellations, while
+specificity remains essentially unchanged, continuing to limit costly
+false overbookings. Overall, it remains a robust and reliable model for
+supporting overbooking policies and is the stronger option compared to
+the basic SVM.
 
 **Business Case Usefulness: Moderate–High**
 
@@ -1531,34 +1678,34 @@ confusionMatrix(as.factor(pred_rf), as.factor(hotel_test$booking_status), positi
     ## Confusion Matrix and Statistics
     ## 
     ##           Reference
-    ## Prediction    0    1
-    ##          0 7112 1029
-    ##          1  218 2524
+    ## Prediction     0     1
+    ##          0 11867  1983
+    ##          1   316  3972
     ##                                           
-    ##                Accuracy : 0.8854          
-    ##                  95% CI : (0.8793, 0.8913)
-    ##     No Information Rate : 0.6735          
+    ##                Accuracy : 0.8732          
+    ##                  95% CI : (0.8683, 0.8781)
+    ##     No Information Rate : 0.6717          
     ##     P-Value [Acc > NIR] : < 2.2e-16       
     ##                                           
-    ##                   Kappa : 0.7232          
+    ##                   Kappa : 0.6905          
     ##                                           
     ##  Mcnemar's Test P-Value : < 2.2e-16       
     ##                                           
-    ##             Sensitivity : 0.7104          
-    ##             Specificity : 0.9703          
-    ##          Pos Pred Value : 0.9205          
-    ##          Neg Pred Value : 0.8736          
-    ##              Prevalence : 0.3265          
-    ##          Detection Rate : 0.2319          
-    ##    Detection Prevalence : 0.2520          
-    ##       Balanced Accuracy : 0.8403          
+    ##             Sensitivity : 0.6670          
+    ##             Specificity : 0.9741          
+    ##          Pos Pred Value : 0.9263          
+    ##          Neg Pred Value : 0.8568          
+    ##              Prevalence : 0.3283          
+    ##          Detection Rate : 0.2190          
+    ##    Detection Prevalence : 0.2364          
+    ##       Balanced Accuracy : 0.8205          
     ##                                           
     ##        'Positive' Class : 1               
     ## 
 
 The random forest is one of the strongest models in the portfolio, with
-excellent **accuracy (88.5%), high sensitivity (71%), very high
-specificity (97%), and strong balanced accuracy (84%).** This model
+excellent **accuracy (87.3%), high sensitivity (66.7%), very high
+specificity (97.4%), and strong balanced accuracy (82%).** This model
 effectively identifies cancellations while avoiding false alarms, giving
 hotels a powerful tool for making profitable overbooking decisions. Its
 strong predictive signal and superior error balance make it the
@@ -1570,14 +1717,14 @@ best-performing model for the business use case.
 
 | Model | Accuracy | Kappa | Sensitivity | Specificity | Balanced Accuracy |
 |----|---:|---:|---:|---:|---:|
-| LogReg (Basic) | 0.7768 | 0.4167 | 0.4061 | 0.9565 | 0.6813 |
-| LogReg (Enhanced) | 0.7886 | 0.4490 | 0.4289 | 0.9629 | 0.6959 |
-| KNN (Final, threshold 0.7) | 0.8185 | 0.5405 | 0.5243 | 0.9611 | 0.7427 |
-| ANN | 0.8088 | 0.5389 | 0.5964 | 0.9117 | 0.7541 |
-| Decision Tree | 0.8797 | 0.7154 | **0.7399** | 0.9475 | **0.8437** |
-| SVM (Basic) | 0.8117 | 0.5517 | 0.6243 | 0.9026 | 0.7634 |
-| SVM (Enhanced) | 0.8194 | 0.5604 | 0.5961 | 0.9276 | 0.7618 |
-| Random Forest | **0.8854** | **0.7232** | 0.7104 | **0.9703** | 0.8403 |
+| LogReg (Basic) | 0.7742 | 0.4098 | 0.3966 | 0.9588 | 0.6777 |
+| LogReg (Enhanced) | 0.7864 | 0.4443 | 0.4232 | 0.9640 | 0.6936 |
+| KNN (Final, threshold 0.7) | 0.8085 | 0.5116 | 0.4915 | 0.9634 | 0.7275 |
+| ANN | 0.7802 | 0.4299 | 0.4191 | 0.9567 | 0.6879 |
+| Decision Tree | 0.8688 | 0.6838 | **0.6838** | 0.9593 | **0.8215** |
+| SVM (Basic) | 0.8216 | 0.5540 | 0.5464 | 0.9561 | 0.7513 |
+| SVM (Enhanced) | 0.8355 | 0.5943 | 0.5914 | 0.9549 | 0.7731 |
+| Random Forest | **0.8732** | **0.6905** | 0.6670 | **0.9741** | 0.8205 |
 
 Overall, the **Random Forest model is the best option** so far for
 hotels to identify cancellations and make profitable overbooking
@@ -1602,20 +1749,20 @@ stacked_data <- data.frame(
 head(stacked_data)
 ```
 
-    ##       logreg        knn       ann decision_tree        svm random_forest
-    ## 1  0.2713635 0.00000000 0.5811059   0.053125396 0.20301957         0.054
-    ## 7  0.1166368 0.07692308 0.1915040   0.169243873 0.07748765         0.016
-    ## 8  0.2401012 0.07692308 0.4445186   0.006908412 0.36975747         0.034
-    ## 12 0.1900378 0.38461538 0.3893187   0.164549093 0.15716337         0.094
-    ## 25 0.4886667 0.07692308 0.5809394   0.164549093 0.11338696         0.050
-    ## 26 0.4174350 0.23076923 0.5290343   0.164549093 0.26261618         0.082
+    ##         logreg        knn        ann decision_tree        svm random_forest
+    ## 1  0.277658634 0.00000000 0.36333516   0.005449266 0.12216016         0.072
+    ## 4  0.933893860 1.00000000 0.90990119   0.998300394 0.95322598         0.996
+    ## 5  0.532836721 0.71428571 0.50209605   0.673691030 0.75595086         0.792
+    ## 7  0.110329717 0.07692308 0.08405712   0.154846875 0.05980590         0.044
+    ## 8  0.237257806 0.23076923 0.24036579   0.005460724 0.19607509         0.026
+    ## 10 0.008606448 0.07692308 0.01970717   0.017058026 0.02888148         0.102
     ##    booking_status
     ## 1               0
+    ## 4               1
+    ## 5               1
     ## 7               0
     ## 8               0
-    ## 12              0
-    ## 25              0
-    ## 26              0
+    ## 10              0
 
 ## Step 8: Split Stacked Data
 
@@ -1628,6 +1775,21 @@ stack_test  <- stacked_data[-trainrows, ]
 ```
 
 ## Step 9: Build Second Level Models
+
+Before training the second-level stacked models, it is worth noting that
+our first-level models already achieve strong predictive
+performance.This suggests that a cost matrix is not strictly required to
+reach high accuracy or balanced error rates. However, because our goal
+is not just predictive performance but **business-aligned
+decision-making**, we incorporate thresholds and cost weighting to
+reflect the real financial tradeoffs faced by hotels. In our business
+case, a false positive (incorrectly predicting a guest will not cancel)
+results in an expensive overbooking penalty, while a false negative
+simply leads to an unused room. Therefore, we construct a cost matrix
+where **false positives are treated as twice as costly as false
+negatives**, aligning the stacked models with the operational costs of
+hotel overbooking. For our non-cost-sensitive models, we continue to
+utilize our threshold of 0.7.
 
 ### Step 9.1: Build Decision Tree without Cost Matrix
 
@@ -1643,10 +1805,6 @@ plot(model_stack_nocost)
 
 ### Step 9.2: Build Decision Tree with Cost Matrix
 
-For our business case, we will have the cost matrix represent the
-accounting cost of overbooking. Meaning, false negatives are 2x as
-costly to the business as a false positive.
-
 ``` r
 cost_matrix <- matrix(c(0, 500, 250, 0), nrow = 2)
 cost_matrix
@@ -1655,8 +1813,6 @@ cost_matrix
     ##      [,1] [,2]
     ## [1,]    0  250
     ## [2,]  500    0
-
-Build Decision Tree
 
 ``` r
 model_stack_cost <- C5.0(
@@ -1673,7 +1829,7 @@ model_stack_cost <- C5.0(
 plot(model_stack_cost)
 ```
 
-![](PreliminaryModel_files/figure-gfm/unnamed-chunk-35-1.png)<!-- -->
+![](PreliminaryModel_files/figure-gfm/unnamed-chunk-34-1.png)<!-- -->
 
 ### Step 9.3: Build Random Forest without Class Weights
 
@@ -1687,7 +1843,7 @@ rf_stack_nocost <- randomForest(
 varImpPlot(rf_stack_nocost, main = "Variable Importance — Stacked RF (No Cost)")
 ```
 
-![](PreliminaryModel_files/figure-gfm/unnamed-chunk-36-1.png)<!-- -->
+![](PreliminaryModel_files/figure-gfm/unnamed-chunk-35-1.png)<!-- -->
 
 ### Step 9.4: Build Random Forest with Class Weights
 
@@ -1702,26 +1858,41 @@ rf_stack <- randomForest(
 varImpPlot(rf_stack, main = "Variable Importance — Stacked RF (Cost Weighted)")
 ```
 
-![](PreliminaryModel_files/figure-gfm/unnamed-chunk-37-1.png)<!-- -->
+![](PreliminaryModel_files/figure-gfm/unnamed-chunk-36-1.png)<!-- -->
 
 ### Analysis
 
-Across all four stacked models—both decision trees and both random
-forests—the ensembles consistently rely most heavily on the base
-Decision Tree and base Random Forest predictions when making their final
-classification. The first splits in both stacked decision trees are
-dominated by these two models, and the variable-importance plots for
-both versions of the stacked random forest show the same pattern:
-random_forest and decision_tree carry the strongest signal by a wide
-margin, with KNN, logistic regression, SVM, and ANN contributing far
-less.
+Across all four stacked models,the ensembles consistently place the most
+weight on the strongest base learners. In every model, the **Random
+Forest prediction** is the dominant input: it forms the first split in
+both stacked decision trees and shows the highest variable importance in
+both stacked random forests. The **Decision Tree** model is the next
+most influential, regularly appearing in upper-level splits and
+receiving the second-highest importance scores.
 
-This consistency reinforces our earlier findings that the Decision Tree
-and Random Forest were the strongest individual learners, and it shows
-that the stacked models naturally learned to trust them most (even when
-cost weighting was applied) highlighting the robustness of the two base
-models. \## Step 10: Predict and Evaluate \### Step 10.1:
-Predict/Evaluate Decision Tree without Cost Matrix
+Notably, the stacked models also reveal that the **SVM model provides
+meaningful predictive signal**. In both the cost-weighted and
+non-cost-weighted versions of the stacked random forest, SVM ranks as
+the third most important contributor. It also appears repeatedly in
+mid-level splits of the stacked decision trees, indicating that it adds
+useful complementary information that the tree-based learners rely on
+when refining predictions.
+
+KNN, logistic regression, and the ANN model contribute smaller amounts
+of information, generally appearing only in lower-level branches or
+receiving lower importance scores. They still add incremental value, but
+their influence on the ensemble is clearly weaker compared to Random
+Forest, Decision Tree, and SVM.
+
+Overall, the stacked models naturally learn to trust the **top three
+base models—Random Forest, Decision Tree, and SVM—most heavily**, which
+aligns with their relatively strong standalone performance. This
+confirms that the stacking procedure is effectively capturing and
+combining the predictive strengths of the best individual learners.
+
+## Step 10: Predict and Evaluate
+
+### Step 10.1: Predict/Evaluate Decision Tree without Cost Matrix
 
 ``` r
 dt_no_cost_prob <- predict(model_stack_nocost, stack_test, type = "prob")[, "1"]
@@ -1737,39 +1908,40 @@ confusionMatrix(
     ## 
     ##           Reference
     ## Prediction    0    1
-    ##          0 2055  202
-    ##          1  141  867
+    ##          0 3505  464
+    ##          1  132 1341
     ##                                           
-    ##                Accuracy : 0.8949          
-    ##                  95% CI : (0.8839, 0.9053)
-    ##     No Information Rate : 0.6726          
+    ##                Accuracy : 0.8905          
+    ##                  95% CI : (0.8819, 0.8987)
+    ##     No Information Rate : 0.6683          
     ##     P-Value [Acc > NIR] : < 2.2e-16       
     ##                                           
-    ##                   Kappa : 0.7579          
+    ##                   Kappa : 0.741           
     ##                                           
-    ##  Mcnemar's Test P-Value : 0.001197        
+    ##  Mcnemar's Test P-Value : < 2.2e-16       
     ##                                           
-    ##             Sensitivity : 0.8110          
-    ##             Specificity : 0.9358          
-    ##          Pos Pred Value : 0.8601          
-    ##          Neg Pred Value : 0.9105          
-    ##              Prevalence : 0.3274          
-    ##          Detection Rate : 0.2655          
-    ##    Detection Prevalence : 0.3087          
-    ##       Balanced Accuracy : 0.8734          
+    ##             Sensitivity : 0.7429          
+    ##             Specificity : 0.9637          
+    ##          Pos Pred Value : 0.9104          
+    ##          Neg Pred Value : 0.8831          
+    ##              Prevalence : 0.3317          
+    ##          Detection Rate : 0.2464          
+    ##    Detection Prevalence : 0.2707          
+    ##       Balanced Accuracy : 0.8533          
     ##                                           
     ##        'Positive' Class : 1               
     ## 
 
-This stacked decision tree without the cost matrix performs extremely
-well across all metrics, achieving one of the **highest balanced
-accuracies (87.3%)** of all first and second level models and a very
-strong **sensitivity (81%).** This means it correctly identifies the
-majority of cancellations while still maintaining strong **specificity
-(93.6%)**, minimizing false overbookings. The model offers a strong
-trade-off between detecting high-risk bookings and avoiding unnecessary
-penalties. Overall, this is a high-performing model and an excellent fit
-for optimizing overbooking decisions with strong predictive stability.
+This stacked decision tree without a cost matrix performs exceptionally
+well across all evaluation metrics. It achieves an accuracy of
+**89.1%**, a strong sensitivity of **74.3%**, and an excellent
+specificity of **96.4%**, meaning it correctly identifies most
+cancellations while keeping false overbookings very low. Its **balanced
+accuracy of 85.3%** is among the highest of all first and second-level
+models, demonstrating that the ensemble generalizes well across both
+classes. This strong combination of high sensitivity and high
+specificity makes the model especially effective for identifying
+high-risk reservations while avoiding costly overbooking penalties.
 
 **Business Case Usefulness: High**
 
@@ -1789,46 +1961,48 @@ confusionMatrix(
     ## 
     ##           Reference
     ## Prediction    0    1
-    ##          0 2104  276
-    ##          1   92  793
+    ##          0 3530  535
+    ##          1  107 1270
     ##                                           
-    ##                Accuracy : 0.8873          
-    ##                  95% CI : (0.8759, 0.8979)
-    ##     No Information Rate : 0.6726          
+    ##                Accuracy : 0.882           
+    ##                  95% CI : (0.8732, 0.8905)
+    ##     No Information Rate : 0.6683          
     ##     P-Value [Acc > NIR] : < 2.2e-16       
     ##                                           
-    ##                   Kappa : 0.7323          
+    ##                   Kappa : 0.717           
     ##                                           
     ##  Mcnemar's Test P-Value : < 2.2e-16       
     ##                                           
-    ##             Sensitivity : 0.7418          
-    ##             Specificity : 0.9581          
-    ##          Pos Pred Value : 0.8960          
-    ##          Neg Pred Value : 0.8840          
-    ##              Prevalence : 0.3274          
-    ##          Detection Rate : 0.2429          
-    ##    Detection Prevalence : 0.2711          
-    ##       Balanced Accuracy : 0.8500          
+    ##             Sensitivity : 0.7036          
+    ##             Specificity : 0.9706          
+    ##          Pos Pred Value : 0.9223          
+    ##          Neg Pred Value : 0.8684          
+    ##              Prevalence : 0.3317          
+    ##          Detection Rate : 0.2334          
+    ##    Detection Prevalence : 0.2530          
+    ##       Balanced Accuracy : 0.8371          
     ##                                           
     ##        'Positive' Class : 1               
     ## 
 
-When a cost matrix is applied to the DT model, **sensitivity decreases
-to 74%,** but specificity increases to an exceptional 95.8%. This
-version of the model is more conservative: it avoids false positives
-(which are the most financially costly at –\$500 each) but at the
-expense of missing some cancellations. **Balanced accuracy (85%)**
-remains very strong, and the model aligns well with minimizing
-overbooking penalties. While slightly less aggressive in detecting
-cancellations, it is still a reliable option for real-world operations,
-especially if hotel management prioritizes avoiding walking a guest over
-profiting off of overbooking.
+When a cost matrix is applied to the stacked decision tree, the model
+becomes more conservative in its predictions. Sensitivity decreases to
+**70.4%**, meaning it identifies slightly fewer cancellations, but
+specificity increases to an exceptional **97.1%**, sharply reducing
+costly false positives. This behavior aligns with the business objective
+encoded in the cost matrix: avoiding overbookings (false positives) is
+twice as important as missing a cancellation (false negative).
+
+Despite being more conservative, the model still delivers strong overall
+performance, achieving a high accuracy of **88.2%** and a robust
+balanced accuracy of **83.7%**. This makes the cost-weighted stacked
+decision tree a reliable option when hotel management prioritizes
+minimizing the financial risk of overbooking, even if it means missing a
+few additional cancellations.
 
 **Business Case Usefulness: Moderate–High**
 
 ### Step 10.3: Predict/Evaluate Random Forest without Costs
-
-We threshold at 0.7.
 
 ``` r
 rf_stack_nocost_prob <- predict(rf_stack_nocost, stack_test, type = "prob")[, "1"]
@@ -1845,44 +2019,42 @@ confusionMatrix(
     ## 
     ##           Reference
     ## Prediction    0    1
-    ##          0 2121  290
-    ##          1   75  779
+    ##          0 3544  516
+    ##          1   93 1289
     ##                                           
-    ##                Accuracy : 0.8882          
-    ##                  95% CI : (0.8769, 0.8988)
-    ##     No Information Rate : 0.6726          
+    ##                Accuracy : 0.8881          
+    ##                  95% CI : (0.8794, 0.8964)
+    ##     No Information Rate : 0.6683          
     ##     P-Value [Acc > NIR] : < 2.2e-16       
     ##                                           
-    ##                   Kappa : 0.7324          
+    ##                   Kappa : 0.7317          
     ##                                           
     ##  Mcnemar's Test P-Value : < 2.2e-16       
     ##                                           
-    ##             Sensitivity : 0.7287          
-    ##             Specificity : 0.9658          
-    ##          Pos Pred Value : 0.9122          
-    ##          Neg Pred Value : 0.8797          
-    ##              Prevalence : 0.3274          
-    ##          Detection Rate : 0.2386          
-    ##    Detection Prevalence : 0.2616          
-    ##       Balanced Accuracy : 0.8473          
+    ##             Sensitivity : 0.7141          
+    ##             Specificity : 0.9744          
+    ##          Pos Pred Value : 0.9327          
+    ##          Neg Pred Value : 0.8729          
+    ##              Prevalence : 0.3317          
+    ##          Detection Rate : 0.2369          
+    ##    Detection Prevalence : 0.2540          
+    ##       Balanced Accuracy : 0.8443          
     ##                                           
     ##        'Positive' Class : 1               
     ## 
 
-The stacked random forest without the cost matrix has high **specificity
-(96.6%),** the best among first and second level models, meaning it is
-ideal for minimizing overbooking penalties. **Sensitivity (72.9%) and
-balanced accuracy (84.7%)** remain strong, providing a reliable signal
-for identifying cancellations. Similarly to the previous mode, this
-model is well-suited for hotels that prefer a more conservative
-overbooking strategy, accepting a slightly higher risk of missed
-cancellations in exchange for fewer false positives.
+The stacked random forest without a cost matrix performs extremely well
+under the 0.7 threshold. It achieves a strong sensitivity of **71.4%**,
+meaning it identifies a large share of true cancellations, while
+maintaining an exceptionally high specificity of **97.4%**, one of the
+highest among all first- and second-level models. This balance minimizes
+costly false positives while still capturing most high-risk bookings.
+Its **balanced accuracy of 84.4%** reflects robust performance across
+both classes, even with the more conservative threshold.
 
 **Business Case Usefulness: Moderate–High**
 
 ### Step 10.4: Predict/Evaluate Random Forest with Costs
-
-Since costs are already incorporated, we threshold at 0.5.
 
 ``` r
 rf_stack_prob <- predict(rf_stack, stack_test, type = "prob")[, "1"]
@@ -1899,39 +2071,37 @@ confusionMatrix(
     ## 
     ##           Reference
     ## Prediction    0    1
-    ##          0 2057  204
-    ##          1  139  865
+    ##          0 3429  334
+    ##          1  208 1471
     ##                                           
-    ##                Accuracy : 0.8949          
-    ##                  95% CI : (0.8839, 0.9053)
-    ##     No Information Rate : 0.6726          
+    ##                Accuracy : 0.9004          
+    ##                  95% CI : (0.8921, 0.9082)
+    ##     No Information Rate : 0.6683          
     ##     P-Value [Acc > NIR] : < 2.2e-16       
     ##                                           
-    ##                   Kappa : 0.7577          
+    ##                   Kappa : 0.7713          
     ##                                           
-    ##  Mcnemar's Test P-Value : 0.0005489       
+    ##  Mcnemar's Test P-Value : 7.908e-08       
     ##                                           
-    ##             Sensitivity : 0.8092          
-    ##             Specificity : 0.9367          
-    ##          Pos Pred Value : 0.8616          
-    ##          Neg Pred Value : 0.9098          
-    ##              Prevalence : 0.3274          
-    ##          Detection Rate : 0.2649          
-    ##    Detection Prevalence : 0.3075          
-    ##       Balanced Accuracy : 0.8729          
+    ##             Sensitivity : 0.8150          
+    ##             Specificity : 0.9428          
+    ##          Pos Pred Value : 0.8761          
+    ##          Neg Pred Value : 0.9112          
+    ##              Prevalence : 0.3317          
+    ##          Detection Rate : 0.2703          
+    ##    Detection Prevalence : 0.3085          
+    ##       Balanced Accuracy : 0.8789          
     ##                                           
     ##        'Positive' Class : 1               
     ## 
 
-The stacked random forest with a cost matrix is one of the top
-performers overall. With outstanding **sensitivity (81%) and strong
-specificity (93.7%),** this model maintains excellent balance while
-directly incorporating business costs into training. It achieves the
-highest accuracy in the group (89.5%) and one of the highest **balanced
-accuracies (87.3%).** Because it both captures a large share of
-cancellations and avoids most costly false positives, it delivers one of
-the most financially optimized outcomes for hotels who want profit off
-of overooking but are also concerned about the cost of walking a guest.
+The stacked random forest with a cost matrix is one of the strongest
+performers across all models. With excellent sensitivity (**81.5%**) and
+strong specificity (**94.3%**), it captures a large majority of true
+cancellations while still keeping false positives relatively low. Its
+overall accuracy of **90.0%** is the highest among all first- and
+second-level models, and its **balanced accuracy of 87.9%** is also near
+the top, demonstrating outstanding performance across both classes.
 
 **Business Case Usefulness: High**
 
@@ -1939,18 +2109,19 @@ of overooking but are also concerned about the cost of walking a guest.
 
 | Model | Accuracy | Kappa | Sensitivity | Specificity | Balanced Accuracy |
 |----|---:|---:|---:|---:|---:|
-| LogReg (Basic) | 0.7768 | 0.4167 | 0.4061 | 0.9565 | 0.6813 |
-| LogReg (Enhanced) | 0.7886 | 0.4490 | 0.4289 | 0.9629 | 0.6959 |
-| KNN (Final, threshold 0.7) | 0.8185 | 0.5405 | 0.5243 | 0.9611 | 0.7427 |
-| ANN | 0.8088 | 0.5389 | 0.5964 | 0.9117 | 0.7541 |
-| Decision Tree (Base) | 0.8797 | 0.7154 | 0.7399 | 0.9475 | 0.8437 |
-| SVM (Basic) | 0.8117 | 0.5517 | 0.6243 | 0.9026 | 0.7634 |
-| SVM (Enhanced) | 0.8194 | 0.5604 | 0.5961 | 0.9276 | 0.7618 |
-| Random Forest (Base) | 0.8854 | 0.7232 | 0.7104 | 0.9703 | 0.8403 |
-| Stacked DT (No Cost, thr = 0.7) | **0.8949** | **0.7579** | **0.8110** | 0.9358 | **0.8734** |
-| Stacked DT (Cost Matrix) | 0.8873 | 0.7323 | 0.7418 | 0.9581 | 0.8500 |
-| Stacked RF (No Cost, thr = 0.7) | 0.8882 | 0.7324 | 0.7287 | **0.9658** | 0.8473 |
-| Stacked RF (Cost Weighted) | \*\*0.8949\* | 0.7577 | 0.8092 | 0.9367 | 0.8729 |
+| LogReg (Basic) | 0.7742 | 0.4098 | 0.3966 | 0.9588 | 0.6777 |
+| LogReg (Enhanced) | 0.7864 | 0.4443 | 0.4232 | 0.9640 | 0.6936 |
+| KNN (Final, threshold 0.7) | 0.8085 | 0.5116 | 0.4915 | 0.9634 | 0.7275 |
+| ANN | 0.7802 | 0.4299 | 0.4191 | 0.9567 | 0.6879 |
+| Decision Tree (Base) | 0.8688 | 0.6838 | 0.6838 | 0.9593 | 0.8215 |
+| SVM (Basic) | 0.8216 | 0.5540 | 0.5464 | 0.9561 | 0.7513 |
+| SVM (Enhanced) | 0.8355 | 0.5943 | 0.5914 | 0.9549 | 0.7731 |
+| Random Forest (Base) | 0.8732 | 0.6905 | 0.6670 | 0.9741 | 0.8205 |
+| **Stacked DT (No Cost, thr = 0.7)** | 0.8905 | 0.7410 | 0.7429 | 0.9637 | 0.8533 |
+| Stacked DT (Cost Matrix) | 0.8820 | 0.7170 | 0.7036 | 0.9706 | 0.8371 |
+| Stacked RF (No Cost, thr = 0.7) | 0.8881 | 0.7317 | 0.7141 | **0.9744** | 0.8443 |
+| **Stacked RF (Cost Weighted)** | **0.9004** | **0.7713** | **0.8150** | 0.9428 | **0.8789** |
+|  |  |  |  |  |  |
 
 Overall, **the stacked random forest with the cost matrix is the best
 model** for hotel operational use.
@@ -2002,14 +2173,14 @@ There were **3,553 total cancellations (TP + FN)**, resulting in
 
 | Model | TN | FP | FN | TP | Profit Calculation | Raw Profit |
 |----|----|----|----|----|----|----|
-| LogReg (Basic) | 7011 | 319 | 2110 | 1443 | 1443×250 – 319×500 – 2110×250 = 360,750 – 159,500 – 527,500 | –326,250 |
-| LogReg (Enhanced) | 7058 | 272 | 2029 | 1524 | 1524×250 – 272×500 – 2029×250 = 381,000 – 136,000 – 507,250 | –262,250 |
-| KNN (0.7) | 7045 | 285 | 1690 | 1863 | 1863×250 – 285×500 – 1690×250 = 465,750 – 142,500 – 422,500 | –99,250 |
-| ANN | 6683 | 647 | 1434 | 2119 | 2119×250 – 647×500 – 1434×250 = 529,750 – 323,500 – 358,500 | –152,250 |
-| Decision Tree (Base) | 6945 | 385 | 924 | 2629 | 2629×250 – 385×500 – 924×250 = 657,250 – 192,500 – 231,000 | +233,750 |
-| SVM (Basic) | 6616 | 714 | 1335 | 2218 | 2218×250 – 714×500 – 1335×250 = 554,500 – 357,000 – 333,750 | –136,250 |
-| SVM (Enhanced) | 6799 | 531 | 1435 | 2118 | 2118×250 – 531×500 – 1435×250 = 529,500 – 265,500 – 358,750 | –94,750 |
-| Random Forest (Base) | 7112 | 218 | 1029 | 2524 | 2524×250 – 218×500 – 1029×250 = 631,000 – 109,000 – 257,250 | +264,750 |
+| LogReg (Basic) | 11681 | 502 | 3593 | 2362 | 2362×250 – 502×500 – 3593×250 = 590,500 – 251,000 – 898,250 | **–558,750** |
+| LogReg (Enhanced) | 11744 | 439 | 3435 | 2520 | 2520×250 – 439×500 – 3435×250 = 630,000 – 219,500 – 858,750 | **–448,250** |
+| KNN (0.7) | 11737 | 446 | 3028 | 2927 | 2927×250 – 446×500 – 3028×250 = 731,750 – 223,000 – 757,000 | **–248,250** |
+| ANN | 11655 | 528 | 3459 | 2496 | 2496×250 – 528×500 – 3459×250 = 624,000 – 264,000 – 864,750 | **–504,750** |
+| Decision Tree | 11687 | 496 | 1883 | 4072 | 4072×250 – 496×500 – 1883×250 = 1,018,000 – 248,000 – 470,750 | **+299,250** |
+| SVM (Basic) | 11648 | 535 | 2701 | 3254 | 3254×250 – 535×500 – 2701×250 = 813,500 – 267,500 – 675,250 | **–129,250** |
+| SVM (Enhanced) | 11633 | 550 | 2433 | 3522 | 3522×250 – 550×500 – 2433×250 = 880,500 – 275,000 – 608,250 | **–2,750** |
+| Random Forest | 11867 | 316 | 1983 | 3972 | 3972×250 – 316×500 – 1983×250 = 993,000 – 158,000 – 495,750 | **+339,250** |
 
 ### Profit Comparison Table — Stacked Models
 
@@ -2017,31 +2188,53 @@ Scaled because the stacked test set is 30% of the original test set.
 
 | Model | TN | FP | FN | TP | Profit Calculation | Raw Profit | Scaled Profit |
 |----|----|----|----|----|----|----|----|
-| Stacked DT (No Cost) | 2055 | 141 | 202 | 867 | 867×250 – 141×500 – 202×250 = 216,750 – 70,500 – 50,500 | +95,750 | +318,333 |
-| Stacked DT (Cost Matrix) | 2104 | 92 | 276 | 793 | 793×250 – 92×500 – 276×250 = 198,250 – 46,000 – 69,000 | +83,250 | +277,500 |
-| Stacked RF (No Cost) | 2121 | 75 | 290 | 779 | 779×250 – 75×500 – 290×250 = 194,750 – 37,500 – 72,500 | +84,750 | +282,500 |
-| Stacked RF (Cost Weighted) | 2057 | 139 | 204 | 865 | 865×250 – 139×500 – 204×250 = 216,250 – 69,500 – 51,000 | +95,750 | +318,333 |
+| Stacked DT (No Cost) | 3505 | 132 | 464 | 1341 | 1341×250 – 132×500 – 464×250 = 335,250 – 66,000 – 116,000 | +153,250 | **+510,833** |
+| Stacked DT (Cost Matrix) | 3530 | 107 | 535 | 1270 | 1270×250 – 107×500 – 535×250 = 317,500 – 53,500 – 133,750 | +130,250 | **+434,167** |
+| Stacked RF (No Cost) | 3544 | 93 | 516 | 1289 | 1289×250 – 93×500 – 516×250 = 322,250 – 46,500 – 129,000 | +146,750 | **+489,167** |
+| Stacked RF (Cost Weighted) | 3429 | 208 | 334 | 1471 | 1471×250 – 208×500 – 334×250 = 367,750 – 104,000 – 83,500 | +180,250 | **+600,833** |
+
+The stacked models dramatically outperform all first-level models in
+terms of profitability. While only two base models (Decision Tree and
+Random Forest) produced positive profit, **all four stacked models
+generate substantial financial gains**, with the **Cost-Weighted Stacked
+Random Forest delivering the highest projected profit (+600,833)**. In
+our case, stacking not only improves predictive accuracy but also
+translates directly into significantly better financial outcomes for
+hotel overbooking decisions.
 
 ### Final Recommendation:
 
-Our final recommendation is the Cost-Weighted Stacked Random Forest.
-While the no-cost stacked decision tree performed similarly, the
+Our final recommendation is the Cost-Weighted Stacked Random Forest. The
 weighted Random Forest is more stable, incorporates our financial costs
 directly into training, and better avoids the expensive false positives,
-making it the more reliable model for real hotel operations.
+making it the more reliable model for real hotel operations. It also
+outperforms all other models on metrics and profit.
 
 ### How Much Is the Model Worth?
 
 - **Baseline (Doing Nothing):**  
-  3,553 × (–\$250) = **–\$888,250**
+  5,955 × (–\$250) = **–\$1,488,750**
 
 - **Best Model Profit:**  
   **+\$318,333**
 
 - **Model Value:**  
-  \$318,333 – (–\$888,250) = **\$1,206,583**
+  \$600,833 – (–\$1,488,750) = **\$2,089,583**
 
-**The model is worth approximately \$1.21 million.**
+**The model is worth approximately \$2.09 million.**
+
+#### Net Savings Per Customer
+
+We divide the total value of the model by the number of customers in the
+full test set:
+
+- **Total customers:** 18,138  
+- **Model value:** \$2,089,583  
+- **Net savings per customer:**  
+  \$2,089,583 ÷ 18,138 = **\$115.20 per customer**
+
+**The model generates approximately \$115.20 in net financial savings
+for every customer booking.**
 
 ### Operational Interpretation (What This Means for a Real Hotel)
 
@@ -2050,11 +2243,58 @@ a hotel’s reservation or revenue-management system to update overbooking
 levels in real time. By sharply reducing **false positives** (the most
 expensive error type), the model minimizes the risk of walking guests
 while still recovering revenue from likely cancellations. Even moderate
-improvements in predictive accuracy translate into over **\$1.2 million
-in annualized value** in our dataset, making this an extremely impactful
-decision-support tool for high-volume hotels. Though, we must keep in
-mind that the model relies on historical cancellation behavior, which
-may shift due to seasonality, economic factors, or changes in booking
-policies. Additionally, rebooking revenue and walk costs are
-hotel-specific and may differ from the fixed values assumed here,
-meaning periodic retraining and threshold tuning will be necessary.
+improvements in predictive accuracy translate into over **\$2.0 million
+in annualized financial value** in our dataset, making this an extremely
+impactful decision-support tool for high-volume hotels.
+
+However, it is important to recognize that the model relies on
+historical cancellation behavior, which may shift due to seasonality,
+economic factors, or changes in booking policies. Additionally,
+rebooking revenue and walk costs are hotel-specific and may differ from
+the fixed values assumed here, meaning periodic retraining and threshold
+tuning will be necessary to keep the model aligned with real-world
+conditions.
+
+### Practical Scenarios: How Ron Can Use the Model
+
+Now that Ron has a cancellation-prediction model, he can make smarter,
+data-driven decisions in daily operations. Here are several realistic
+examples of how the model improves decision-making:
+
+**Scenario 1: Extra Demand on a Busy Night**  
+Ron has 20 confirmed reservations for Saturday night and receives 10
+more booking requests.  
+The model identifies that **6 of the original guests have a high
+cancellation probability** based on the stacked Random Forest output.  
+→ Ron confidently accepts 6 additional bookings, knowing he is unlikely
+to exceed capacity.  
+→ Result: No walks, no empty rooms, and an estimated **+\$1,500** in
+recovered revenue.
+
+**Scenario 2: Corporate Group Blocks 5 Rooms**  
+A corporate client wants to hold 5 unpaid rooms for an event.  
+The model classifies the group’s booking pattern as **high cancellation
+risk**, based on similar historical cases.  
+→ Ron can safely oversell by 1–2 rooms to protect revenue.  
+→ Result: Better utilization and reduced chance of unused inventory.
+
+**Scenario 3: High-Risk Overbooking During a Holiday**  
+On a holiday weekend, demand is extremely high.  
+The model predicts that **most current reservations are low-risk (likely
+to show)**.  
+→ Ron chooses *not* to overbook, avoiding expensive \$500 guest-walk
+penalties.  
+→ Result: No angry customers, no compensation costs, smoother
+operations.
+
+**Scenario 4: End-of-Month Revenue Boost**  
+Ron is behind on his monthly revenue target.  
+The model highlights a cluster of bookings with **elevated cancellation
+probability**, giving Ron the confidence to slightly oversell and
+recapture otherwise lost revenue.  
+→ Result: A safe, predictable month-end performance without harming
+guest satisfaction.
+
+These scenarios show how the model transforms Ron’s overbooking strategy
+from guesswork into a measurable, financially optimized process—directly
+tied to the hotel’s economic priorities.
