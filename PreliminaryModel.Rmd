@@ -1,5 +1,5 @@
 ---
-title: "Final Project Draft of Code"
+title: "Predicting Hotel Booking Cancellations to Optimize Overbooking Decisions"
 author: "Third Time's the Charm"
 date: "2025-10-23"
 output:
@@ -23,7 +23,22 @@ knitr::opts_chunk$set(echo = TRUE)
 Hotel Reservations (~35,000 rows)  
 Predicts hotel booking cancellations and potential no-shows. The business use case focuses on **optimizing overbooking decisions** to maximize hotel occupancy and revenue.
 
+### Who This Model Is For
+
+This model is designed for **hotel managers, revenue analysts, and operations teams** who need to make daily decisions about how many rooms to overbook without risking costly walk-outs. These users rely on accurate, real-time cancellation predictions to:
+
+- Maintain full occupancy  
+- Reduce last-minute empty rooms  
+- Avoid walking guests  
+- Improve customer satisfaction and revenue performance  
+
+The model serves as a **practical decision-support tool** that transforms raw reservation data into actionable insights to guide smarter overbooking strategies.
+
+
 ### Scenario: Meet Ron, the Hotel Manager
+
+<img src="ron1.jpg" width="240" style="float:right; margin-left:20px; margin-bottom:20px;"/>
+
 
 Ron is the general manager of a mid-sized city hotel that operates near full capacity during most of the year. Recently, Ron has been facing a major operational headache: **cancellations and overbookings are wrecking his occupancy numbers**. Some nights he ends up with 20 empty rooms because too many guests canceled at the last minute. Other nights, he slightly overbooks to compensate—but the wrong guests show up, forcing him to **walk** customers to nearby hotels, costing him money and damaging his reputation.
 
@@ -200,7 +215,7 @@ test_labels <- hotel_test_scaled$booking_status
 ```
 
 ### Step 4.3: Build ANN Model
-We are now building an ANN model with a hidden layer of 5 neurons. With structured data, typically a shallow network can capture enough valuable relationships. 
+We are now building an ANN model with a hidden layer of 2 neurons. With structured data, typically a shallow network can capture enough valuable relationships. 
 ```{r, cache = TRUE}
 ann_model <- neuralnet(
   booking_status ~ .,
@@ -250,7 +265,7 @@ Determines how far the influence of each support vector extends.
 - A **smaller σ** (e.g., 0.05) makes each support vector’s influence very local, enabling the model to capture **fine-grained, nonlinear boundaries** (risk of overfitting).  
 - A **larger σ** smooths the decision boundary, reducing overfitting but potentially missing subtle structure in the data.
 
-This improved SVM aims to better separate likely cancellations from non-cancellations by allowing a more flexible, finely tuned boundary.
+This improved SVM aims to better separate likely cancellations from non-cancellations by manually controlling the RBF kernel’s σ value, allowing a more flexible, finely tuned decision boundary than the default model.
 ```{r, cache=TRUE}
 hotel_svm_enhanced <- ksvm(
   as.factor(booking_status) ~ .,
@@ -810,3 +825,7 @@ The model highlights a cluster of bookings with **elevated cancellation probabil
 → Result: A safe, predictable month-end performance without harming guest satisfaction.
 
 These scenarios show how the model transforms Ron’s overbooking strategy from guesswork into a measurable, financially optimized process—directly tied to the hotel’s economic priorities.
+
+<center>
+<img src="ron2.jpg" width="300"/>
+</center>
