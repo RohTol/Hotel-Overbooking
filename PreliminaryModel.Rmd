@@ -262,10 +262,10 @@ Controls the trade-off between maximizing the margin and minimizing classificati
 **σ (Sigma in the RBF kernel):**  
 Determines how far the influence of each support vector extends.
 
-- A **smaller σ** (e.g., 0.05) makes each support vector’s influence very local, enabling the model to capture **fine-grained, nonlinear boundaries** (risk of overfitting).  
-- A **larger σ** smooths the decision boundary, reducing overfitting but potentially missing subtle structure in the data.
+- A **smaller σ** (e.g., 0.05) spreads out the influence of each support vector, creating a smoother, more generalizable boundary (lower variance, higher bias).  
+- A **larger σ** makes similarity drop off quickly, causing the model to fit very localized patterns in the data (higher variance, risk of overfitting).
 
-This improved SVM aims to better separate likely cancellations from non-cancellations by manually controlling the RBF kernel’s σ value, allowing a more flexible, finely tuned decision boundary than the default model.
+This improved SVM aims to better separate likely cancellations from non-cancellations by manually controlling the RBF kernel’s σ value, allowing a smoother decision boundary less prone to overfitting. 
 ```{r, cache=TRUE}
 hotel_svm_enhanced <- ksvm(
   as.factor(booking_status) ~ .,
@@ -623,9 +623,9 @@ confusionMatrix(
   positive = "1"
 )
 ```
-This stacked decision tree without a cost matrix performs exceptionally well across all evaluation metrics. It achieves an accuracy of **89.1%**, a strong sensitivity of **74.3%**, and an excellent specificity of **96.4%**, meaning it correctly identifies most cancellations while keeping false overbookings very low. Its **balanced accuracy of 85.3%** is among the highest of all first and second-level models, demonstrating that the ensemble generalizes well across both classes. This strong combination of high sensitivity and high specificity makes the model especially effective for identifying high-risk reservations while avoiding costly overbooking penalties.
+This stacked decision tree without a cost matrix performs exceptionally well across all evaluation metrics. It achieves an accuracy of **89.3%**, a strong sensitivity of **76%**, and an excellent specificity of **95.9%**, meaning it correctly identifies most cancellations while keeping false overbookings very low. Its **balanced accuracy of 85.3%** is among the highest of all first and second-level models, demonstrating that the ensemble generalizes well across both classes. This strong combination of high sensitivity and high specificity makes the model especially effective for identifying high-risk reservations while avoiding costly overbooking penalties.
 
-**Business Case Usefulness: High**
+**Business Case Usefulness: Moderate-High**
 
 
 ### Step 10.2: Predict/Evaluate Decision Tree with Cost Matrix
@@ -639,11 +639,11 @@ confusionMatrix(
 )
 
 ```
-When a cost matrix is applied to the stacked decision tree, the model becomes more conservative in its predictions. Sensitivity decreases to **70.4%**, meaning it identifies slightly fewer cancellations, but specificity increases to an exceptional **97.1%**, sharply reducing costly false positives. This behavior aligns with the business objective encoded in the cost matrix: avoiding overbookings (false positives) is twice as important as missing a cancellation (false negative).
+When a cost matrix is applied to the stacked decision tree, the model becomes more conservative in its predictions. Sensitivity decreases to **75.6%**, meaning it identifies slightly fewer cancellations, but specificity increases to an exceptional **96.5%**, sharply reducing costly false positives. This behavior aligns with the business objective encoded in the cost matrix: avoiding overbookings (false positives) is twice as important as missing a cancellation (false negative).
 
-Despite being more conservative, the model still delivers strong overall performance, achieving a high accuracy of **88.2%** and a robust balanced accuracy of **83.7%**. This makes the cost-weighted stacked decision tree a reliable option when hotel management prioritizes minimizing the financial risk of overbooking, even if it means missing a few additional cancellations.
+Despite being more conservative, the model still delivers strong overall performance, achieving a high accuracy of **89.6%** and a robust balanced accuracy of **86.1%**. This makes the cost-weighted stacked decision tree a reliable option when hotel management prioritizes minimizing the financial risk of overbooking, even if it means missing a few additional cancellations.
 
-**Business Case Usefulness: Moderate–High**
+**Business Case Usefulness: High**
 
 
 
@@ -658,7 +658,7 @@ confusionMatrix(
   positive = "1"
 )
 ```
-The stacked random forest without a cost matrix performs extremely well under the 0.7 threshold. It achieves a strong sensitivity of **71.4%**, meaning it identifies a large share of true cancellations, while maintaining an exceptionally high specificity of **97.4%**, one of the highest among all first- and second-level models. This balance minimizes costly false positives while still capturing most high-risk bookings. Its **balanced accuracy of 84.4%** reflects robust performance across both classes, even with the more conservative threshold.
+The stacked random forest without a cost matrix performs extremely well under the 0.7 threshold. It achieves a strong sensitivity of **71.8%**, meaning it identifies a large share of true cancellations, while maintaining an exceptionally high specificity of **97.5%**, one of the highest among all first- and second-level models. This balance minimizes costly false positives while still capturing most high-risk bookings. Its **balanced accuracy of 84.6%** reflects robust performance across both classes, even with the more conservative threshold.
 
 **Business Case Usefulness: Moderate–High**
 
@@ -675,7 +675,7 @@ confusionMatrix(
 )
 
 ```
-The stacked random forest with a cost matrix is one of the strongest performers across all models. With excellent sensitivity (**81.5%**) and strong specificity (**94.3%**), it captures a large majority of true cancellations while still keeping false positives relatively low. Its overall accuracy of **90.0%** is the highest among all first- and second-level models, and its **balanced accuracy of 87.9%** is also near the top, demonstrating outstanding performance across both classes.
+The stacked random forest with a cost matrix is one of the strongest performers across all models. With excellent sensitivity (**80.9%**) and strong specificity (**94.9%**), it captures a large majority of true cancellations while still keeping false positives relatively low. Its overall accuracy of **90.3%** is the highest among all first- and second-level models, and its **balanced accuracy of 87.9%** is also near the top, demonstrating outstanding performance across both classes.
 
 **Business Case Usefulness: High**
 
@@ -694,10 +694,10 @@ The stacked random forest with a cost matrix is one of the strongest performers 
 | SVM (Basic)                         | 0.8216   | 0.5540 | 0.5464      | 0.9561      | 0.7513            |
 | SVM (Enhanced)                      | 0.8355   | 0.5943 | 0.5914      | 0.9549      | 0.7731            |
 | Random Forest (Base)                | 0.8732   | 0.6905 | 0.6670      | 0.9741      | 0.8205            |
-| **Stacked DT (No Cost, thr = 0.7)** | 0.8905 | 0.7410 | 0.7429      | 0.9637      | 0.8533        |
-| Stacked DT (Cost Matrix)            | 0.8820   | 0.7170 | 0.7036      | 0.9706      | 0.8371            |
-| Stacked RF (No Cost, thr = 0.7)     | 0.8881   | 0.7317 | 0.7141      | **0.9744**      | 0.8443            |
-| **Stacked RF (Cost Weighted)**      | **0.9004** | **0.7713** | **0.8150**      | 0.9428      | **0.8789**        |
+| **Stacked DT (No Cost, thr = 0.7)** | 0.8931 | 0.7484 | 0.7603      | 0.9586      | 0.8594        |
+| Stacked DT (Cost Matrix)            | 0.8962   | 0.7546 | 0.7564      | 0.9651      | 0.8608            |
+| Stacked RF (No Cost, thr = 0.7)     | 0.8896   | 0.7349 | 0.7175      | **0.9745**      | 0.8460            |
+| **Stacked RF (Cost Weighted)**      | **0.9028** | **0.7753** | **0.8087**      | 0.9492      | **0.8790**        |
            |
 Overall, **the stacked random forest with the cost matrix is the best model** for hotel operational use.
 
@@ -754,12 +754,12 @@ Scaled because the stacked test set is 30% of the original test set.
 
 | Model                       | TN   | FP  | FN  | TP   | Profit Calculation                                                     | Raw Profit | Scaled Profit |
 |-----------------------------|------|-----|------|------|--------------------------------------------------------------------------|------------|----------------|
-| Stacked DT (No Cost)        | 3505 | 132 | 464  | 1341 | 1341×250 – 132×500 – 464×250 = 335,250 – 66,000 – 116,000               | +153,250   | **+510,833**   |
-| Stacked DT (Cost Matrix)    | 3530 | 107 | 535  | 1270 | 1270×250 – 107×500 – 535×250 = 317,500 – 53,500 – 133,750               | +130,250   | **+434,167**   |
-| Stacked RF (No Cost)        | 3544 | 93  | 516  | 1289 | 1289×250 – 93×500 – 516×250 = 322,250 – 46,500 – 129,000                | +146,750   | **+489,167**   |
-| Stacked RF (Cost Weighted)  | 3429 | 208 | 334  | 1471 | 1471×250 – 208×500 – 334×250 = 367,750 – 104,000 – 83,500              | +180,250   | **+600,833**   |
+| Stacked DT (No Cost)        | 3493 | 151 | 431  | 1367 | 1367×250 – 151×500 – 431×250 = 341,750 – 75,500 – 107,750               | +158,500   | **+528,333**   |
+| Stacked DT (Cost Matrix)    | 3517 | 127 | 438  | 1360 | 1360×250 – 127×500 – 438×250 = 340,000 – 63,500 – 109,550               | +167,000   | **+556,667**   |
+| Stacked RF (No Cost)        | 3551 | 93  | 508  | 1290 | 1290×250 – 93×500 – 508×250 = 322,500 – 46,500 – 127,000                | +149,000   | **+496,667**   |
+| Stacked RF (Cost Weighted)  | 3459 | 185 | 344  | 1454 | 1454×250 – 185×500 – 344×250 = 363,550 – 92,500 – 86,000              | +185,000   | **+616,667**   |
 
-The stacked models dramatically outperform all first-level models in terms of profitability. While only two base models (Decision Tree and Random Forest) produced positive profit, **all four stacked models generate substantial financial gains**, with the **Cost-Weighted Stacked Random Forest delivering the highest projected profit (+600,833)**. In our case, stacking not only improves predictive accuracy but also translates directly into significantly better financial outcomes for hotel overbooking decisions.
+The stacked models dramatically outperform all first-level models in terms of profitability. While only two base models (Decision Tree and Random Forest) produced positive profit, **all four stacked models generate substantial financial gains**, with the **Cost-Weighted Stacked Random Forest delivering the highest projected profit (+616,667)**. In our case, stacking not only improves predictive accuracy but also translates directly into significantly better financial outcomes for hotel overbooking decisions.
 
 
 ### Final Recommendation:
@@ -771,23 +771,23 @@ Our final recommendation is the Cost-Weighted Stacked Random Forest. The weighte
   5,955 × (–\$250) = **–\$1,488,750**
 
 - **Best Model Profit:**  
-  **+\$318,333**
+  **+\$616,667**
 
 - **Model Value:**  
-  \$600,833 – (–\$1,488,750) = **\$2,089,583**
+  \$616,667 – (–\$1,488,750) = **\$2,105,417**
 
-**The model is worth approximately $2.09 million.**
+**The model is worth approximately $2.1 million.**
 
 #### Net Savings Per Customer
 
 We divide the total value of the model by the number of customers in the full test set:
 
 - **Total customers:** 18,138  
-- **Model value:** $2,089,583  
+- **Model value:** $2,105,417  
 - **Net savings per customer:**  
-  $2,089,583 ÷ 18,138 = **$115.20 per customer**
+  $2,105,417 ÷ 18,138 = **$116.08 per customer**
 
-**The model generates approximately $115.20 in net financial savings for every customer booking.**
+**The model generates approximately $116.08 in net financial savings for every customer booking.**
 
 
 ### Operational Interpretation (What This Means for a Real Hotel)

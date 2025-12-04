@@ -2115,18 +2115,17 @@ model (higher bias, lower variance).</li>
 <p><strong>σ (Sigma in the RBF kernel):</strong><br />
 Determines how far the influence of each support vector extends.</p>
 <ul>
-<li>A <strong>smaller σ</strong> (e.g., 0.05) makes each support
-vector’s influence very local, enabling the model to capture
-<strong>fine-grained, nonlinear boundaries</strong> (risk of
-overfitting).<br />
+<li>A <strong>smaller σ</strong> (e.g., 0.05) spreads out the influence
+of each support vector, creating a smoother, more generalizable boundary
+(lower variance, higher bias).<br />
 </li>
-<li>A <strong>larger σ</strong> smooths the decision boundary, reducing
-overfitting but potentially missing subtle structure in the data.</li>
+<li>A <strong>larger σ</strong> makes similarity drop off quickly,
+causing the model to fit very localized patterns in the data (higher
+variance, risk of overfitting).</li>
 </ul>
 <p>This improved SVM aims to better separate likely cancellations from
 non-cancellations by manually controlling the RBF kernel’s σ value,
-allowing a more flexible, finely tuned decision boundary than the
-default model.</p>
+allowing a smoother decision boundary less prone to overfitting.</p>
 <pre class="r"><code>hotel_svm_enhanced &lt;- ksvm(
   as.factor(booking_status) ~ .,
   data = hotel_train_scaled,
@@ -2921,9 +2920,9 @@ confusionMatrix(
 ## </code></pre>
 <p>This stacked decision tree without a cost matrix performs
 exceptionally well across all evaluation metrics. It achieves an
-accuracy of <strong>89.1%</strong>, a strong sensitivity of
-<strong>74.3%</strong>, and an excellent specificity of
-<strong>96.4%</strong>, meaning it correctly identifies most
+accuracy of <strong>89.3%</strong>, a strong sensitivity of
+<strong>76%</strong>, and an excellent specificity of
+<strong>95.9%</strong>, meaning it correctly identifies most
 cancellations while keeping false overbookings very low. Its
 <strong>balanced accuracy of 85.3%</strong> is among the highest of all
 first and second-level models, demonstrating that the ensemble
@@ -2931,7 +2930,7 @@ generalizes well across both classes. This strong combination of high
 sensitivity and high specificity makes the model especially effective
 for identifying high-risk reservations while avoiding costly overbooking
 penalties.</p>
-<p><strong>Business Case Usefulness: High</strong></p>
+<p><strong>Business Case Usefulness: Moderate-High</strong></p>
 </div>
 <div id="step-10.2-predictevaluate-decision-tree-with-cost-matrix" class="section level3">
 <h3>Step 10.2: Predict/Evaluate Decision Tree with Cost Matrix</h3>
@@ -2971,19 +2970,19 @@ confusionMatrix(
 ## </code></pre>
 <p>When a cost matrix is applied to the stacked decision tree, the model
 becomes more conservative in its predictions. Sensitivity decreases to
-<strong>70.4%</strong>, meaning it identifies slightly fewer
+<strong>75.6%</strong>, meaning it identifies slightly fewer
 cancellations, but specificity increases to an exceptional
-<strong>97.1%</strong>, sharply reducing costly false positives. This
+<strong>96.5%</strong>, sharply reducing costly false positives. This
 behavior aligns with the business objective encoded in the cost matrix:
 avoiding overbookings (false positives) is twice as important as missing
 a cancellation (false negative).</p>
 <p>Despite being more conservative, the model still delivers strong
-overall performance, achieving a high accuracy of <strong>88.2%</strong>
-and a robust balanced accuracy of <strong>83.7%</strong>. This makes the
+overall performance, achieving a high accuracy of <strong>89.6%</strong>
+and a robust balanced accuracy of <strong>86.1%</strong>. This makes the
 cost-weighted stacked decision tree a reliable option when hotel
 management prioritizes minimizing the financial risk of overbooking,
 even if it means missing a few additional cancellations.</p>
-<p><strong>Business Case Usefulness: Moderate–High</strong></p>
+<p><strong>Business Case Usefulness: High</strong></p>
 </div>
 <div id="step-10.3-predictevaluate-random-forest-without-costs" class="section level3">
 <h3>Step 10.3: Predict/Evaluate Random Forest without Costs</h3>
@@ -3024,12 +3023,12 @@ confusionMatrix(
 ## </code></pre>
 <p>The stacked random forest without a cost matrix performs extremely
 well under the 0.7 threshold. It achieves a strong sensitivity of
-<strong>71.4%</strong>, meaning it identifies a large share of true
+<strong>71.8%</strong>, meaning it identifies a large share of true
 cancellations, while maintaining an exceptionally high specificity of
-<strong>97.4%</strong>, one of the highest among all first- and
+<strong>97.5%</strong>, one of the highest among all first- and
 second-level models. This balance minimizes costly false positives while
 still capturing most high-risk bookings. Its <strong>balanced accuracy
-of 84.4%</strong> reflects robust performance across both classes, even
+of 84.6%</strong> reflects robust performance across both classes, even
 with the more conservative threshold.</p>
 <p><strong>Business Case Usefulness: Moderate–High</strong></p>
 </div>
@@ -3072,10 +3071,10 @@ confusionMatrix(
 ## </code></pre>
 <p>The stacked random forest with a cost matrix is one of the strongest
 performers across all models. With excellent sensitivity
-(<strong>81.5%</strong>) and strong specificity
-(<strong>94.3%</strong>), it captures a large majority of true
+(<strong>80.9%</strong>) and strong specificity
+(<strong>94.9%</strong>), it captures a large majority of true
 cancellations while still keeping false positives relatively low. Its
-overall accuracy of <strong>90.0%</strong> is the highest among all
+overall accuracy of <strong>90.3%</strong> is the highest among all
 first- and second-level models, and its <strong>balanced accuracy of
 87.9%</strong> is also near the top, demonstrating outstanding
 performance across both classes.</p>
@@ -3169,35 +3168,35 @@ performance across both classes.</p>
 </tr>
 <tr class="odd">
 <td><strong>Stacked DT (No Cost, thr = 0.7)</strong></td>
-<td align="right">0.8905</td>
-<td align="right">0.7410</td>
-<td align="right">0.7429</td>
-<td align="right">0.9637</td>
-<td align="right">0.8533</td>
+<td align="right">0.8931</td>
+<td align="right">0.7484</td>
+<td align="right">0.7603</td>
+<td align="right">0.9586</td>
+<td align="right">0.8594</td>
 </tr>
 <tr class="even">
 <td>Stacked DT (Cost Matrix)</td>
-<td align="right">0.8820</td>
-<td align="right">0.7170</td>
-<td align="right">0.7036</td>
-<td align="right">0.9706</td>
-<td align="right">0.8371</td>
+<td align="right">0.8962</td>
+<td align="right">0.7546</td>
+<td align="right">0.7564</td>
+<td align="right">0.9651</td>
+<td align="right">0.8608</td>
 </tr>
 <tr class="odd">
 <td>Stacked RF (No Cost, thr = 0.7)</td>
-<td align="right">0.8881</td>
-<td align="right">0.7317</td>
-<td align="right">0.7141</td>
-<td align="right"><strong>0.9744</strong></td>
-<td align="right">0.8443</td>
+<td align="right">0.8896</td>
+<td align="right">0.7349</td>
+<td align="right">0.7175</td>
+<td align="right"><strong>0.9745</strong></td>
+<td align="right">0.8460</td>
 </tr>
 <tr class="even">
 <td><strong>Stacked RF (Cost Weighted)</strong></td>
-<td align="right"><strong>0.9004</strong></td>
-<td align="right"><strong>0.7713</strong></td>
-<td align="right"><strong>0.8150</strong></td>
-<td align="right">0.9428</td>
-<td align="right"><strong>0.8789</strong></td>
+<td align="right"><strong>0.9028</strong></td>
+<td align="right"><strong>0.7753</strong></td>
+<td align="right"><strong>0.8087</strong></td>
+<td align="right">0.9492</td>
+<td align="right"><strong>0.8790</strong></td>
 </tr>
 <tr class="odd">
 <td></td>
@@ -3420,43 +3419,43 @@ set.</p>
 <tbody>
 <tr class="odd">
 <td>Stacked DT (No Cost)</td>
-<td>3505</td>
-<td>132</td>
-<td>464</td>
-<td>1341</td>
-<td>1341×250 – 132×500 – 464×250 = 335,250 – 66,000 – 116,000</td>
-<td>+153,250</td>
-<td><strong>+510,833</strong></td>
+<td>3493</td>
+<td>151</td>
+<td>431</td>
+<td>1367</td>
+<td>1367×250 – 151×500 – 431×250 = 341,750 – 75,500 – 107,750</td>
+<td>+158,500</td>
+<td><strong>+528,333</strong></td>
 </tr>
 <tr class="even">
 <td>Stacked DT (Cost Matrix)</td>
-<td>3530</td>
-<td>107</td>
-<td>535</td>
-<td>1270</td>
-<td>1270×250 – 107×500 – 535×250 = 317,500 – 53,500 – 133,750</td>
-<td>+130,250</td>
-<td><strong>+434,167</strong></td>
+<td>3517</td>
+<td>127</td>
+<td>438</td>
+<td>1360</td>
+<td>1360×250 – 127×500 – 438×250 = 340,000 – 63,500 – 109,550</td>
+<td>+167,000</td>
+<td><strong>+556,667</strong></td>
 </tr>
 <tr class="odd">
 <td>Stacked RF (No Cost)</td>
-<td>3544</td>
+<td>3551</td>
 <td>93</td>
-<td>516</td>
-<td>1289</td>
-<td>1289×250 – 93×500 – 516×250 = 322,250 – 46,500 – 129,000</td>
-<td>+146,750</td>
-<td><strong>+489,167</strong></td>
+<td>508</td>
+<td>1290</td>
+<td>1290×250 – 93×500 – 508×250 = 322,500 – 46,500 – 127,000</td>
+<td>+149,000</td>
+<td><strong>+496,667</strong></td>
 </tr>
 <tr class="even">
 <td>Stacked RF (Cost Weighted)</td>
-<td>3429</td>
-<td>208</td>
-<td>334</td>
-<td>1471</td>
-<td>1471×250 – 208×500 – 334×250 = 367,750 – 104,000 – 83,500</td>
-<td>+180,250</td>
-<td><strong>+600,833</strong></td>
+<td>3459</td>
+<td>185</td>
+<td>344</td>
+<td>1454</td>
+<td>1454×250 – 185×500 – 344×250 = 363,550 – 92,500 – 86,000</td>
+<td>+185,000</td>
+<td><strong>+616,667</strong></td>
 </tr>
 </tbody>
 </table>
@@ -3465,7 +3464,7 @@ terms of profitability. While only two base models (Decision Tree and
 Random Forest) produced positive profit, <strong>all four stacked models
 generate substantial financial gains</strong>, with the
 <strong>Cost-Weighted Stacked Random Forest delivering the highest
-projected profit (+600,833)</strong>. In our case, stacking not only
+projected profit (+616,667)</strong>. In our case, stacking not only
 improves predictive accuracy but also translates directly into
 significantly better financial outcomes for hotel overbooking
 decisions.</p>
@@ -3484,11 +3483,11 @@ It also outperforms all other models on metrics and profit.</p>
 <li><p><strong>Baseline (Doing Nothing):</strong><br />
 5,955 × (–$250) = <strong>–$1,488,750</strong></p></li>
 <li><p><strong>Best Model Profit:</strong><br />
-<strong>+$318,333</strong></p></li>
+<strong>+$616,667</strong></p></li>
 <li><p><strong>Model Value:</strong><br />
-$600,833 – (–$1,488,750) = <strong>$2,089,583</strong></p></li>
+$616,667 – (–$1,488,750) = <strong>$2,105,417</strong></p></li>
 </ul>
-<p><strong>The model is worth approximately $2.09 million.</strong></p>
+<p><strong>The model is worth approximately $2.1 million.</strong></p>
 <div id="net-savings-per-customer" class="section level4">
 <h4>Net Savings Per Customer</h4>
 <p>We divide the total value of the model by the number of customers in
@@ -3496,12 +3495,12 @@ the full test set:</p>
 <ul>
 <li><strong>Total customers:</strong> 18,138<br />
 </li>
-<li><strong>Model value:</strong> $2,089,583<br />
+<li><strong>Model value:</strong> $2,105,417<br />
 </li>
 <li><strong>Net savings per customer:</strong><br />
-$2,089,583 ÷ 18,138 = <strong>$115.20 per customer</strong></li>
+$2,105,417 ÷ 18,138 = <strong>$116.08 per customer</strong></li>
 </ul>
-<p><strong>The model generates approximately $115.20 in net financial
+<p><strong>The model generates approximately $116.08 in net financial
 savings for every customer booking.</strong></p>
 </div>
 </div>
